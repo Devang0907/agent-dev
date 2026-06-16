@@ -1,0 +1,56 @@
+import { render } from "ink";
+import React from "react";
+import { loadSettings } from "./config/settings.js";
+import { SessionManager } from "./session/manager.js";
+import { AgentSession } from "./agent/session.js";
+import { parseArgs, printHelp } from "./cli/args.js";
+import { runPrintMode } from "./modes/print-mode.js";
+import { App } from "./ui/App.js";
+
+export async function main(): Promise<void> {
+  const args = parseArgs(process.argv);
+
+  if (args.help) {
+    printHelp();
+    return;
+  }
+
+  const settings = loadSettings();
+  const workdir = process.cwd();
+
+  let sessionManager: SessionManager;
+  if (args.continueSession) {
+    sessionManager = SessionManager.loadLast() ?? new SessionManager(undefined, workdir);
+  } else {
+    sessionManager = new SessionManager(undefined, workdir);
+  }
+
+  const initialModel = AgentSession.resolveInitialModel(settings, args.model);
+  const session = new AgentSession(settings, sessionManager, workdir, initialModel);
+
+  const usePrint = args.print || !process.stdin.isTTY || !process.stdout.isTTY;
+
+  if (usePrint) {
+    const prompt = args.prompt ?? "";
+    if (!prompt) {
+      console.error("Print mode requires a prompt argument.");
+      process.exit(1);
+    }
+    await runPrintMode(session, prompt);
+    return;
+  }
+
+  const { waitUntilExit } = render(
+    React.createElement(App, {
+      session,
+      workdir,
+      onQuit: () => {},
+    }),
+  );
+
+  if (args.prompt) {
+    setTimeout(() => session.prompt(args.prompt!), 100);
+  }
+
+  await waitUntilExit();
+}

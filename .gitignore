@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# npm pack tarballs
+*.tgz
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Test / coverage
+coverage/
+
+# Local config overrides
+.agent-dev/
