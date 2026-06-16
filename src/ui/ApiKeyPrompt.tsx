@@ -5,7 +5,6 @@ import type { Model, ProviderId } from "../providers/types.js";
 import { PROVIDER_LABELS } from "../config/models.js";
 import { PROVIDER_ENV_VARS } from "../providers/registry.js";
 import { LeftBorder } from "./LeftBorder.js";
-import { Panel } from "./Panel.js";
 
 interface ApiKeyPromptProps {
   theme: ThemeColors;
@@ -29,64 +28,69 @@ export function ApiKeyPrompt({ theme, provider, model, onSubmit, onCancel }: Api
     return () => clearInterval(id);
   }, []);
 
-  useInput((input, key) => {
-    if (key.escape) {
-      onCancel();
-      return;
-    }
+  useInput(
+    (input, key) => {
+      if (key.escape) {
+        onCancel();
+        return;
+      }
 
-    if (key.return) {
-      const trimmed = value.trim();
-      if (trimmed) onSubmit(trimmed);
-      return;
-    }
+      if (key.return) {
+        const trimmed = value.trim();
+        if (trimmed) onSubmit(trimmed);
+        return;
+      }
 
-    if (key.backspace || key.delete) {
-      setValue((v) => v.slice(0, -1));
-      return;
-    }
+      if (key.backspace || key.delete) {
+        setValue((v) => v.slice(0, -1));
+        return;
+      }
 
-    if (input && !key.ctrl && !key.meta) {
-      setValue((v) => v + input);
-    }
-  });
+      if (input && !key.ctrl && !key.meta) {
+        setValue((v) => v + input);
+      }
+    },
+    { isActive: true },
+  );
 
   const envVars = PROVIDER_ENV_VARS[provider];
   const masked = "•".repeat(value.length);
 
   return (
-    <Box paddingX={2} marginTop={1}>
-      <LeftBorder theme={theme} borderColor={theme.borderActive}>
+    <Box flexDirection="column" marginX={2} marginTop={1} marginBottom={1}>
+      <LeftBorder theme={theme} borderColor={theme.primary}>
         <Text color={theme.text} bold>API key required</Text>
-        <Text color={theme.textMuted}> Enter save · Esc back</Text>
+        <Text color={theme.textMuted}> Enter save · Esc cancel</Text>
 
         <Box flexDirection="column" marginTop={1}>
           <Text color={theme.textMuted}>Provider: {PROVIDER_LABELS[provider]}</Text>
           <Text color={theme.textMuted}>Model: {model.name}</Text>
         </Box>
 
-        <Box marginTop={1}>
-          <Panel theme={theme} borderColor={theme.primary} marginBottom={0}>
-            <Box flexDirection="row">
-              {value.length > 0 ? (
-                <>
-                  <Text color={theme.text}>{masked}</Text>
-                  <BlinkingCursor theme={theme} visible={cursorOn} />
-                </>
-              ) : (
-                <>
-                  <Text color={theme.textMuted}>Paste API key…</Text>
-                  <BlinkingCursor theme={theme} visible={cursorOn} />
-                </>
-              )}
-            </Box>
-          </Panel>
+        <Box
+          flexDirection="row"
+          marginTop={1}
+          borderStyle="round"
+          borderColor={theme.primary}
+          paddingX={1}
+          paddingY={0}
+        >
+          {value.length > 0 ? (
+            <>
+              <Text color={theme.text}>{masked}</Text>
+              <BlinkingCursor theme={theme} visible={cursorOn} />
+            </>
+          ) : (
+            <>
+              <Text color={theme.textMuted}>Paste API key here…</Text>
+              <BlinkingCursor theme={theme} visible={cursorOn} />
+            </>
+          )}
         </Box>
 
         <Box marginTop={1}>
-          <Text color={theme.textMuted}>
-            Or set env: {envVars.join(" · ")}
-          </Text>
+          <Text color={theme.textMuted}>Or set env: {envVars.join(" · ")}</Text>
+          <Text color={theme.textMuted}>Saved to ~/.agent-dev/settings.json</Text>
         </Box>
       </LeftBorder>
     </Box>

@@ -32,17 +32,20 @@ export function ModelSelector({ theme, settings, filter, onSelect, onClose }: Mo
   const [index, setIndex] = useState(0);
   const safeIndex = Math.min(index, Math.max(0, filtered.length - 1));
 
-  useInput((_, key) => {
-    if (key.escape) {
-      onClose();
-      return;
-    }
-    if (key.upArrow) setIndex((i) => Math.max(0, i - 1));
-    if (key.downArrow) setIndex((i) => Math.min(filtered.length - 1, i + 1));
-    if (key.return && filtered[safeIndex]) {
-      onSelect(filtered[safeIndex]);
-    }
-  });
+  useInput(
+    (_, key) => {
+      if (key.escape) {
+        onClose();
+        return;
+      }
+      if (key.upArrow) setIndex((i) => Math.max(0, i - 1));
+      if (key.downArrow) setIndex((i) => Math.min(filtered.length - 1, i + 1));
+      if (key.return && filtered[safeIndex]) {
+        onSelect(filtered[safeIndex]);
+      }
+    },
+    { isActive: true },
+  );
 
   const providers: ProviderId[] = ["openai", "groq", "gemini", "free"];
   let lastProvider: ProviderId | undefined;

@@ -1,10 +1,15 @@
-import type { ChatMessage, Model, StreamEvent, ToolCall } from "../providers/types.js";
+import { normalizeToolCalls } from "../providers/openai-compat.js";
 import { streamChat } from "../providers/registry.js";
+import type { ChatMessage, Model, StreamEvent, ToolCall } from "../providers/types.js";
 import type { Settings } from "../config/settings.js";
 import { getToolDefinitions, executeTool } from "./tools/index.js";
 
+const MAX_TOOL_ROUNDS = 6;
+const MAX_SAME_TOOL_CALLS = 2;
+
 const DEFAULT_SYSTEM_PROMPT = `You are a helpful coding assistant with access to tools: read, write, edit, and bash.
-Use tools to inspect and modify the codebase. Be concise and accurate.
+When the user asks you to create or modify files, call write or edit once with the full file content, then reply briefly to confirm.
+Do NOT call the same tool repeatedly with the same arguments. One successful write is enough.
 Working directory: ${process.cwd()}`;
 
 export type AgentEvent =
@@ -23,6 +28,30 @@ export interface AgentLoopOptions {
   systemPrompt?: string;
   signal?: AbortSignal;
   onEvent: (event: AgentEvent) => void;
+}
+
+function isToolUseFailedError(message: string): boolean {
+  return /Failed to call a function|tool_use_failed|failed_generation/i.test(message);
+}
+
+function hadSuccessfulToolResults(context: ChatMessage[]): boolean {
+  return context.some(
+    (m) => m.role === "tool" && m.content.length > 0 && !m.content.startsWith("Error:"),
+  );
+}
+
+function toolSignature(name: string, args: Record<string, unknown>): string {
+  return `${name}:${JSON.stringify(args)}`;
+}
+
+function dedupeToolCalls(toolCalls: ToolCall[]): ToolCall[] {
+  const seen = new Set<string>();
+  return toolCalls.filter((tc) => {
+    const key = `${tc.name}:${tc.arguments}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 async function collectStream(
@@ -66,8 +95,21 @@ async function collectStream(
     }
   }
 
-  const toolCalls = Array.from(toolCallMap.values()).filter((tc) => tc.name);
+  const toolCalls = normalizeToolCalls(Array.from(toolCallMap.values()).filter((tc) => tc.name));
   return { content, toolCalls };
+}
+
+function finishGracefully(
+  context: ChatMessage[],
+  content: string,
+  onEvent: (event: AgentEvent) => void,
+): void {
+  const msg = content.trim() || "Done — changes saved successfully.";
+  if (!content.trim()) {
+    onEvent({ type: "text_delta", delta: msg });
+  }
+  context.push({ role: "assistant", content: msg });
+  onEvent({ type: "turn_end" });
 }
 
 export async function runAgentLoop(options: AgentLoopOptions): Promise<ChatMessage[]> {
@@ -82,9 +124,17 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<ChatMessa
   } = options;
 
   const context = [...messages];
+  const callCounts = new Map<string, number>();
+  let toolRound = 0;
 
   while (true) {
     if (signal?.aborted) break;
+
+    toolRound++;
+    if (toolRound > MAX_TOOL_ROUNDS) {
+      finishGracefully(context, "Done — stopped after too many tool calls.", onEvent);
+      break;
+    }
 
     onEvent({ type: "message_start", role: "assistant" });
 
@@ -98,23 +148,31 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<ChatMessa
     );
 
     if (error) {
+      if (isToolUseFailedError(error) && hadSuccessfulToolResults(context)) {
+        finishGracefully(context, content, onEvent);
+        break;
+      }
       onEvent({ type: "error", message: error });
       break;
     }
 
+    const uniqueCalls = dedupeToolCalls(toolCalls);
+
     const assistantMsg: ChatMessage = {
       role: "assistant",
       content,
-      toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+      toolCalls: uniqueCalls.length > 0 ? uniqueCalls : undefined,
     };
     context.push(assistantMsg);
 
-    if (toolCalls.length === 0) {
+    if (uniqueCalls.length === 0) {
       onEvent({ type: "turn_end" });
       break;
     }
 
-    for (const tc of toolCalls) {
+    let stopAfterBatch = false;
+
+    for (const tc of uniqueCalls) {
       onEvent({ type: "tool_call", toolCall: tc });
       let args: Record<string, unknown> = {};
       try {
@@ -122,6 +180,19 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<ChatMessa
       } catch {
         args = {};
       }
+
+      const sig = toolSignature(tc.name, args);
+      const prev = callCounts.get(sig) ?? 0;
+      callCounts.set(sig, prev + 1);
+
+      if (prev >= MAX_SAME_TOOL_CALLS) {
+        const skip = "Skipped — already executed this action.";
+        onEvent({ type: "tool_result", toolCallId: tc.id, name: tc.name, result: skip });
+        context.push({ role: "tool", content: skip, toolCallId: tc.id, name: tc.name });
+        stopAfterBatch = true;
+        continue;
+      }
+
       const result = await executeTool(tc.name, args, workdir);
       onEvent({ type: "tool_result", toolCallId: tc.id, name: tc.name, result });
       context.push({
@@ -130,6 +201,15 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<ChatMessa
         toolCallId: tc.id,
         name: tc.name,
       });
+
+      if (!result.startsWith("Error:") && (tc.name === "write" || tc.name === "edit")) {
+        stopAfterBatch = true;
+      }
+    }
+
+    if (stopAfterBatch) {
+      finishGracefully(context, content, onEvent);
+      break;
     }
   }
 

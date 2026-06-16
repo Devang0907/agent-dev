@@ -25,6 +25,7 @@ export const readTool: ToolDefinition = {
       path: { type: "string", description: "File path relative to project root" },
     },
     required: ["path"],
+    additionalProperties: false,
   },
 };
 
@@ -48,6 +49,7 @@ export const writeTool: ToolDefinition = {
       content: { type: "string", description: "Content to write" },
     },
     required: ["path", "content"],
+    additionalProperties: false,
   },
 };
 
@@ -72,6 +74,7 @@ export const editTool: ToolDefinition = {
       new_string: { type: "string", description: "Replacement string" },
     },
     required: ["path", "old_string", "new_string"],
+    additionalProperties: false,
   },
 };
 
@@ -102,6 +105,7 @@ export const bashTool: ToolDefinition = {
       command: { type: "string", description: "Shell command to execute" },
     },
     required: ["command"],
+    additionalProperties: false,
   },
 };
 

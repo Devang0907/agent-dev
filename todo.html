@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Todo App</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+        .todo-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .todo-item {
+            padding: 10px;
+            border-bottom: 1px solid #ccc;
+        }
+        .todo-item:last-child {
+            border-bottom: none;
+        }
+    </style>
+</head>
+<body>
+    <h1>Todo App</h1>
+    <input type="text" id="todo-input" placeholder="Add new todo">
+    <button id="add-todo">Add</button>
+    <ul class="todo-list" id="todo-list">
+    </ul>
+    <script>
+        const todoInput = document.getElementById('todo-input');
+        const addTodoButton = document.getElementById('add-todo');
+        const todoList = document.getElementById('todo-list');
+
+        addTodoButton.addEventListener('click', () => {
+            const newTodo = todoInput.value;
+            if (newTodo !== '') {
+                const todoItem = document.createElement('li');
+                todoItem.classList.add('todo-item');
+                todoItem.textContent = newTodo;
+                todoList.appendChild(todoItem);
+                todoInput.value = '';
+            }
+        });
+    </script>
+</body>
+</html>

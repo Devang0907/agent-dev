@@ -7,11 +7,12 @@ import { Footer } from "./Footer.js";
 import { ModelSelector } from "./ModelSelector.js";
 import { ApiKeyPrompt } from "./ApiKeyPrompt.js";
 import { SettingsView } from "./SettingsView.js";
-import { hasProviderAuth } from "../providers/registry.js";
-import type { Model } from "../providers/types.js";
+import { hasProviderAuth, getDefaultModelForProvider } from "../providers/registry.js";
+import type { Model, ProviderId } from "../providers/types.js";
+import { findModel } from "../config/models.js";
+import type { Settings } from "../config/settings.js";
 import { StartupBanner } from "./StartupBanner.js";
 import { getTheme } from "./theme.js";
-import { saveSettings } from "../config/settings.js";
 
 export interface DisplayMessage {
   role: "user" | "assistant" | "tool";
@@ -27,6 +28,12 @@ interface AppProps {
   onQuit: () => void;
 }
 
+function modelForProvider(provider: ProviderId, settings: Settings): Model {
+  const current = findModel(settings.defaultProvider, settings.defaultModel);
+  if (current?.provider === provider) return current;
+  return getDefaultModelForProvider(provider)!;
+}
+
 export function App({ session, workdir, onQuit }: AppProps) {
   const { exit } = useApp();
   const [displayMessages, setDisplayMessages] = useState<DisplayMessage[]>(() =>
@@ -40,12 +47,51 @@ export function App({ session, workdir, onQuit }: AppProps) {
   const [overlay, setOverlay] = useState<Overlay>("none");
   const [modelFilter, setModelFilter] = useState<string | undefined>();
   const [pendingModel, setPendingModel] = useState<Model | null>(null);
+  const [apiKeyReturnOverlay, setApiKeyReturnOverlay] = useState<Overlay>("none");
   const [settings, setSettings] = useState(session.getSettings());
   const [model, setModel] = useState(session.getModel());
   const [running, setRunning] = useState(false);
   const streamingRef = useRef("");
+  const startupChecked = useRef(false);
 
   const theme = getTheme();
+
+  const openApiKeyPrompt = useCallback(
+    (target: Model, returnTo: Overlay = "none") => {
+      setPendingModel(target);
+      setApiKeyReturnOverlay(returnTo);
+      setOverlay("apiKey");
+    },
+    [],
+  );
+
+  const saveApiKey = useCallback(
+    (apiKey: string) => {
+      if (!pendingModel) return;
+      const updated = {
+        ...settings,
+        apiKeys: { ...settings.apiKeys, [pendingModel.provider]: apiKey },
+      };
+      session.updateSettings(updated);
+      setSettings(updated);
+      session.setModel(pendingModel);
+      setModel(pendingModel);
+      setPendingModel(null);
+      setOverlay(apiKeyReturnOverlay);
+      setApiKeyReturnOverlay("none");
+      setModelFilter(undefined);
+    },
+    [pendingModel, settings, session, apiKeyReturnOverlay],
+  );
+
+  useEffect(() => {
+    if (startupChecked.current) return;
+    startupChecked.current = true;
+    const current = session.getModel();
+    if (!hasProviderAuth(current.provider, settings)) {
+      openApiKeyPrompt(current, "none");
+    }
+  }, [session, settings, openApiKeyPrompt]);
 
   useEffect(() => {
     const handler = (event: SessionEvent) => {
@@ -95,6 +141,9 @@ export function App({ session, workdir, onQuit }: AppProps) {
           streamingRef.current = "";
           setStreamingText("");
           setRunning(false);
+          if (/Missing .*API_KEY/i.test(event.message)) {
+            openApiKeyPrompt(model, "none");
+          }
           break;
         case "model_changed":
           setModel(event.model);
@@ -105,14 +154,17 @@ export function App({ session, workdir, onQuit }: AppProps) {
     return () => {
       session.off("event", handler);
     };
-  }, [session]);
+  }, [session, model, openApiKeyPrompt]);
 
-  useInput((_, key) => {
-    if (overlay !== "none") return;
-    if (key.escape && running) {
-      session.abort();
-    }
-  });
+  useInput(
+    (_, key) => {
+      if (overlay !== "none") return;
+      if (key.escape && running) {
+        session.abort();
+      }
+    },
+    { isActive: overlay === "none" },
+  );
 
   const handleSubmit = useCallback(
     async (value: string) => {
@@ -138,9 +190,15 @@ export function App({ session, workdir, onQuit }: AppProps) {
         return;
       }
       if (running) return;
+
+      if (!hasProviderAuth(model.provider, settings)) {
+        openApiKeyPrompt(model, "none");
+        return;
+      }
+
       await session.prompt(value);
     },
-    [session, running, onQuit, exit],
+    [session, running, onQuit, exit, model, settings, openApiKeyPrompt],
   );
 
   const hasChat = displayMessages.length > 0 || streamingText.length > 0;
@@ -178,8 +236,7 @@ export function App({ session, workdir, onQuit }: AppProps) {
           filter={modelFilter}
           onSelect={(m) => {
             if (!hasProviderAuth(m.provider, settings)) {
-              setPendingModel(m);
-              setOverlay("apiKey");
+              openApiKeyPrompt(m, "model");
               return;
             }
             session.setModel(m);
@@ -199,22 +256,11 @@ export function App({ session, workdir, onQuit }: AppProps) {
           theme={theme}
           provider={pendingModel.provider}
           model={pendingModel}
-          onSubmit={(apiKey) => {
-            const updated = {
-              ...settings,
-              apiKeys: { ...settings.apiKeys, [pendingModel.provider]: apiKey },
-            };
-            session.updateSettings(updated);
-            setSettings(updated);
-            session.setModel(pendingModel);
-            setModel(pendingModel);
-            setPendingModel(null);
-            setOverlay("none");
-            setModelFilter(undefined);
-          }}
+          onSubmit={saveApiKey}
           onCancel={() => {
             setPendingModel(null);
-            setOverlay("model");
+            setOverlay(apiKeyReturnOverlay);
+            setApiKeyReturnOverlay("none");
           }}
         />
       )}
@@ -226,7 +272,9 @@ export function App({ session, workdir, onQuit }: AppProps) {
           onUpdate={(s) => {
             session.updateSettings(s);
             setSettings(s);
-            saveSettings(s);
+          }}
+          onSetApiKey={(provider) => {
+            openApiKeyPrompt(modelForProvider(provider, settings), "settings");
           }}
           onClose={() => setOverlay("none")}
         />

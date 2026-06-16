@@ -50,44 +50,47 @@ export function Editor({ theme, model, disabled, running, onSubmit }: EditorProp
     }
   };
 
-  useInput((input, key) => {
-    if (disabled) return;
+  useInput(
+    (input, key) => {
+      if (disabled) return;
 
-    if (key.return) {
-      const trimmed = value.trim();
-      if (trimmed) onSubmit(trimmed);
-      setValue("");
-      setSuggestions([]);
-      return;
-    }
-
-    if (key.tab) {
-      if (value.startsWith("/")) {
-        const completed = completeSlashInput(value);
-        if (completed) {
-          setValue(completed);
-          setSuggestions(matchSlashCommands(completed));
-        } else if (suggestions.length > 0) {
-          setValue(suggestions[0].cmd);
-          setSuggestions(matchSlashCommands(suggestions[0].cmd));
-        }
+      if (key.return) {
+        const trimmed = value.trim();
+        if (trimmed) onSubmit(trimmed);
+        setValue("");
+        setSuggestions([]);
+        return;
       }
-      return;
-    }
 
-    if (key.backspace || key.delete) {
-      const newVal = value.slice(0, -1);
-      setValue(newVal);
-      updateSuggestions(newVal);
-      return;
-    }
+      if (key.tab) {
+        if (value.startsWith("/")) {
+          const completed = completeSlashInput(value);
+          if (completed) {
+            setValue(completed);
+            setSuggestions(matchSlashCommands(completed));
+          } else if (suggestions.length > 0) {
+            setValue(suggestions[0].cmd);
+            setSuggestions(matchSlashCommands(suggestions[0].cmd));
+          }
+        }
+        return;
+      }
 
-    if (input && !key.ctrl && !key.meta) {
-      const newVal = value + input;
-      setValue(newVal);
-      updateSuggestions(newVal);
-    }
-  });
+      if (key.backspace || key.delete) {
+        const newVal = value.slice(0, -1);
+        setValue(newVal);
+        updateSuggestions(newVal);
+        return;
+      }
+
+      if (input && !key.ctrl && !key.meta) {
+        const newVal = value + input;
+        setValue(newVal);
+        updateSuggestions(newVal);
+      }
+    },
+    { isActive: !disabled },
+  );
 
   const placeholder = "Ask anything…";
   const showCursor = !disabled && cursorOn;
