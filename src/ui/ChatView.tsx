@@ -23,7 +23,7 @@ function truncate(text: string, max: number): string {
 export function ChatView({ messages, theme, model, streamingText, running }: ChatViewProps) {
   const [spinIdx, setSpinIdx] = useState(0);
   const hasContent =
-    messages.length > 0 || streamingText.length > 0;
+    messages.length > 0 || (streamingText?.length ?? 0) > 0;
 
   useEffect(() => {
     if (!running && !streamingText) return;
