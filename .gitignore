@@ -34,3 +34,5 @@ coverage/
 
 # Local config overrides
 .agent-dev/
+
+plan.md

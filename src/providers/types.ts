@@ -2,8 +2,6 @@ export type ProviderId = "openai" | "groq" | "gemini" | "free";
 
 export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high";
 
-export type Theme = "dark" | "light";
-
 export interface Model {
   provider: ProviderId;
   id: string;

@@ -1,7 +1,7 @@
 {
   "name": "@devang0907/agent-dev",
-  "version": "0.1.0",
-  "description": "Minimal pi-like terminal coding agent with Ink UI",
+  "version": "0.1.1",
+  "description": "Minimal terminal coding agent",
   "type": "module",
   "license": "MIT",
   "author": "Devang Rakholiya <rakholiyadevang@gmail.com>",
@@ -9,8 +9,17 @@
     "type": "git",
     "url": "git+https://github.com/Devang0907/agent-dev.git"
   },
-  "keywords": ["ai", "agent", "cli", "ink", "coding-agent"],
-  "files": ["dist", "README.md"],
+  "keywords": [
+    "ai",
+    "agent",
+    "cli",
+    "ink",
+    "coding-agent"
+  ],
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "bin": {
     "agent": "dist/cli.js"
   },

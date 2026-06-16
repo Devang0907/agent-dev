@@ -1,13 +1,12 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { CONFIG_DIR, SETTINGS_PATH } from "./paths.js";
 import type { ProviderId } from "../providers/types.js";
-import type { ThinkingLevel, Theme } from "../providers/types.js";
+import type { ThinkingLevel } from "../providers/types.js";
 
 export interface Settings {
   defaultProvider: ProviderId;
   defaultModel: string;
   thinkingLevel: ThinkingLevel;
-  theme: Theme;
   apiKeys?: Partial<Record<ProviderId, string>>;
 }
 
@@ -15,7 +14,6 @@ const DEFAULT_SETTINGS: Settings = {
   defaultProvider: "free",
   defaultModel: "meta-llama/llama-3.3-70b-instruct:free",
   thinkingLevel: "off",
-  theme: "dark",
 };
 
 export function loadSettings(): Settings {
@@ -24,7 +22,14 @@ export function loadSettings(): Settings {
   }
   try {
     const raw = readFileSync(SETTINGS_PATH, "utf-8");
-    return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
+    const parsed = JSON.parse(raw) as Partial<Settings> & { theme?: string };
+    return {
+      ...DEFAULT_SETTINGS,
+      defaultProvider: parsed.defaultProvider ?? DEFAULT_SETTINGS.defaultProvider,
+      defaultModel: parsed.defaultModel ?? DEFAULT_SETTINGS.defaultModel,
+      thinkingLevel: parsed.thinkingLevel ?? DEFAULT_SETTINGS.thinkingLevel,
+      apiKeys: parsed.apiKeys,
+    };
   } catch {
     return { ...DEFAULT_SETTINGS };
   }

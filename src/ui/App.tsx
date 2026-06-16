@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { Box, Text, useInput, useApp } from "ink";
+import { Box, useInput, useApp } from "ink";
 import type { AgentSession, SessionEvent } from "../agent/session.js";
 import { ChatView } from "./ChatView.js";
 import { Editor } from "./Editor.js";
 import { Footer } from "./Footer.js";
 import { ModelSelector } from "./ModelSelector.js";
 import { SettingsView } from "./SettingsView.js";
+import { StartupBanner } from "./StartupBanner.js";
 import { getTheme } from "./theme.js";
 import { saveSettings } from "../config/settings.js";
 
@@ -40,7 +41,7 @@ export function App({ session, workdir, onQuit }: AppProps) {
   const [running, setRunning] = useState(false);
   const streamingRef = useRef("");
 
-  const theme = getTheme(settings.theme);
+  const theme = getTheme();
 
   useEffect(() => {
     const handler = (event: SessionEvent) => {
@@ -138,19 +139,32 @@ export function App({ session, workdir, onQuit }: AppProps) {
     [session, running, onQuit, exit],
   );
 
+  const hasChat = displayMessages.length > 0 || streamingText.length > 0;
+
   return (
     <Box flexDirection="column" height="100%">
-      <Box marginBottom={1}>
-        <Text color={theme.header} bold>agent-dev</Text>
-        <Text color={theme.muted}> — /model /settings /new /quit | Esc abort</Text>
+      <Box paddingX={2} marginBottom={1}>
+        <StartupBanner theme={theme} compact={hasChat} />
       </Box>
 
-      <ChatView messages={displayMessages} theme={theme} streamingText={streamingText} />
+      <ChatView
+        messages={displayMessages}
+        theme={theme}
+        model={model}
+        streamingText={streamingText}
+        running={running}
+      />
 
-      <Footer workdir={workdir} model={model} theme={theme} running={running} />
+      <Footer workdir={workdir} model={model} theme={theme} />
 
       {overlay === "none" && (
-        <Editor theme={theme} disabled={running} onSubmit={handleSubmit} />
+        <Editor
+          theme={theme}
+          model={model}
+          disabled={running}
+          running={running}
+          onSubmit={handleSubmit}
+        />
       )}
 
       {overlay === "model" && (

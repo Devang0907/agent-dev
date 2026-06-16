@@ -6,6 +6,7 @@ import { ALL_MODELS, modelRef, PROVIDER_LABELS } from "../config/models.js";
 import { hasProviderAuth } from "../providers/registry.js";
 import type { Settings } from "../config/settings.js";
 import type { ProviderId } from "../providers/types.js";
+import { LeftBorder } from "./LeftBorder.js";
 
 interface ModelSelectorProps {
   theme: ThemeColors;
@@ -19,7 +20,7 @@ function fuzzyMatch(text: string, query: string): boolean {
   if (!query) return true;
   const lower = text.toLowerCase();
   const q = query.toLowerCase();
-  return lower.includes(q) || modelRef({ provider: "openai", id: text, name: text }).includes(q);
+  return lower.includes(q);
 }
 
 export function ModelSelector({ theme, settings, filter, onSelect, onClose }: ModelSelectorProps) {
@@ -31,7 +32,7 @@ export function ModelSelector({ theme, settings, filter, onSelect, onClose }: Mo
   const [index, setIndex] = useState(0);
   const safeIndex = Math.min(index, Math.max(0, filtered.length - 1));
 
-  useInput((input, key) => {
+  useInput((_, key) => {
     if (key.escape) {
       onClose();
       return;
@@ -41,36 +42,53 @@ export function ModelSelector({ theme, settings, filter, onSelect, onClose }: Mo
     if (key.return && filtered[safeIndex]) {
       onSelect(filtered[safeIndex]);
     }
-    if (input && !key.ctrl) {
-      // typing not used in overlay mode
-    }
   });
 
   const providers: ProviderId[] = ["openai", "groq", "gemini", "free"];
+  let lastProvider: ProviderId | undefined;
 
   return (
-    <Box flexDirection="column" borderStyle="double" borderColor={theme.accent} padding={1}>
-      <Text color={theme.header} bold>/model — select provider & model (Esc to close)</Text>
-      {filter && <Text color={theme.muted}>Filter: {filter}</Text>}
-      <Box flexDirection="column" marginTop={1}>
-        {filtered.length === 0 && <Text color={theme.muted}>No models match</Text>}
-        {filtered.map((m, i) => {
-          const hasKey = hasProviderAuth(m.provider, settings);
-          const selected = i === safeIndex;
-          return (
-            <Text key={modelRef(m)} color={selected ? theme.accent : theme.assistant}>
-              {selected ? "> " : "  "}
-              [{PROVIDER_LABELS[m.provider]}] {m.name}
-              {!hasKey ? " (no key)" : ""}
-            </Text>
-          );
-        })}
-      </Box>
-      <Box marginTop={1}>
-        <Text color={theme.muted}>
-          Providers: {providers.map((p) => `${PROVIDER_LABELS[p]}${hasProviderAuth(p, settings) ? "" : " (no key)"}`).join(" | ")}
-        </Text>
-      </Box>
+    <Box paddingX={2} marginTop={1}>
+      <LeftBorder theme={theme} borderColor={theme.borderActive}>
+        <Text color={theme.text} bold>/model</Text>
+        <Text color={theme.textMuted}> ↑↓ navigate · Enter select · Esc close</Text>
+        {filter && <Text color={theme.textMuted}> filter: {filter}</Text>}
+
+        <Box flexDirection="column" marginTop={1}>
+          {filtered.length === 0 && <Text color={theme.textMuted}>No models match</Text>}
+          {filtered.map((m, i) => {
+            const hasKey = hasProviderAuth(m.provider, settings);
+            const selected = i === safeIndex;
+            const showHeader = m.provider !== lastProvider;
+            lastProvider = m.provider;
+
+            return (
+              <Box key={modelRef(m)} flexDirection="column">
+                {showHeader && (
+                  <Box marginTop={1}>
+                    <Text color={theme.textMuted}>{PROVIDER_LABELS[m.provider]}</Text>
+                  </Box>
+                )}
+                <Text color={selected ? theme.primary : theme.text}>
+                  {selected ? "› " : "  "}
+                  {m.name}
+                  {!hasKey && <Text color={theme.warning}> (no key)</Text>}
+                  {selected && <Text color={theme.textMuted}> {modelRef(m)}</Text>}
+                </Text>
+              </Box>
+            );
+          })}
+        </Box>
+
+        <Box marginTop={1}>
+          <Text color={theme.textMuted}>
+            {providers.map((p) => {
+              const ok = hasProviderAuth(p, settings);
+              return `${ok ? "●" : "○"} ${p}`;
+            }).join("  ")}
+          </Text>
+        </Box>
+      </LeftBorder>
     </Box>
   );
 }

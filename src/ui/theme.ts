@@ -1,39 +1,37 @@
-import type { Theme } from "../providers/types.js";
-
 export interface ThemeColors {
-  user: string;
-  assistant: string;
-  tool: string;
-  border: string;
-  muted: string;
-  accent: string;
+  text: string;
+  textMuted: string;
+  primary: string;
+  secondary: string;
+  success: string;
+  warning: string;
   error: string;
-  header: string;
+  border: string;
+  borderActive: string;
 }
 
-export const themes: Record<Theme, ThemeColors> = {
-  dark: {
-    user: "cyan",
-    assistant: "white",
-    tool: "yellow",
-    border: "gray",
-    muted: "gray",
-    accent: "green",
-    error: "red",
-    header: "blue",
-  },
-  light: {
-    user: "blue",
-    assistant: "black",
-    tool: "yellow",
-    border: "gray",
-    muted: "gray",
-    accent: "green",
-    error: "red",
-    header: "blue",
-  },
+/** OpenCode-inspired palette — standard terminal ANSI colors */
+export const theme: ThemeColors = {
+  text: "white",
+  textMuted: "gray",
+  primary: "cyan",
+  secondary: "blue",
+  success: "green",
+  warning: "yellow",
+  error: "red",
+  border: "gray",
+  borderActive: "white",
 };
 
-export function getTheme(theme: Theme): ThemeColors {
-  return themes[theme];
+export function getTheme(): ThemeColors {
+  return theme;
 }
+
+export const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+
+export const TOOL_ICONS: Record<string, string> = {
+  bash: "$",
+  read: "→",
+  write: "⚙",
+  edit: "%",
+};

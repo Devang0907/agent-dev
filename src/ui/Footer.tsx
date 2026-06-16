@@ -8,14 +8,29 @@ interface FooterProps {
   workdir: string;
   model: Model;
   theme: ThemeColors;
-  running: boolean;
 }
 
-export function Footer({ workdir, model, theme, running }: FooterProps) {
+function shortPath(path: string, max = 56): string {
+  if (path.length <= max) return path;
+  return "…" + path.slice(-(max - 1));
+}
+
+export function Footer({ workdir, model, theme }: FooterProps) {
   return (
-    <Box borderStyle="single" borderColor={theme.border} paddingX={1}>
-      <Text color={theme.muted}>
-        {workdir} | {modelRef(model)} {running ? "| working..." : ""}
+    <Box
+      borderStyle="single"
+      borderColor={theme.border}
+      borderLeft={false}
+      borderRight={false}
+      borderBottom={false}
+      paddingX={2}
+      marginBottom={1}
+    >
+      <Text color={theme.textMuted}>
+        <Text color={theme.primary}>⌂ </Text>
+        {shortPath(workdir)}
+        {"  "}
+        <Text color={theme.text}>{modelRef(model)}</Text>
       </Text>
     </Box>
   );
