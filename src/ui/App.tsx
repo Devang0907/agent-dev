@@ -5,7 +5,10 @@ import { ChatView } from "./ChatView.js";
 import { Editor } from "./Editor.js";
 import { Footer } from "./Footer.js";
 import { ModelSelector } from "./ModelSelector.js";
+import { ApiKeyPrompt } from "./ApiKeyPrompt.js";
 import { SettingsView } from "./SettingsView.js";
+import { hasProviderAuth } from "../providers/registry.js";
+import type { Model } from "../providers/types.js";
 import { StartupBanner } from "./StartupBanner.js";
 import { getTheme } from "./theme.js";
 import { saveSettings } from "../config/settings.js";
@@ -16,7 +19,7 @@ export interface DisplayMessage {
   toolName?: string;
 }
 
-type Overlay = "none" | "model" | "settings";
+type Overlay = "none" | "model" | "settings" | "apiKey";
 
 interface AppProps {
   session: AgentSession;
@@ -36,6 +39,7 @@ export function App({ session, workdir, onQuit }: AppProps) {
   const [streamingText, setStreamingText] = useState("");
   const [overlay, setOverlay] = useState<Overlay>("none");
   const [modelFilter, setModelFilter] = useState<string | undefined>();
+  const [pendingModel, setPendingModel] = useState<Model | null>(null);
   const [settings, setSettings] = useState(session.getSettings());
   const [model, setModel] = useState(session.getModel());
   const [running, setRunning] = useState(false);
@@ -173,6 +177,11 @@ export function App({ session, workdir, onQuit }: AppProps) {
           settings={settings}
           filter={modelFilter}
           onSelect={(m) => {
+            if (!hasProviderAuth(m.provider, settings)) {
+              setPendingModel(m);
+              setOverlay("apiKey");
+              return;
+            }
             session.setModel(m);
             setModel(m);
             setOverlay("none");
@@ -181,6 +190,31 @@ export function App({ session, workdir, onQuit }: AppProps) {
           onClose={() => {
             setOverlay("none");
             setModelFilter(undefined);
+          }}
+        />
+      )}
+
+      {overlay === "apiKey" && pendingModel && (
+        <ApiKeyPrompt
+          theme={theme}
+          provider={pendingModel.provider}
+          model={pendingModel}
+          onSubmit={(apiKey) => {
+            const updated = {
+              ...settings,
+              apiKeys: { ...settings.apiKeys, [pendingModel.provider]: apiKey },
+            };
+            session.updateSettings(updated);
+            setSettings(updated);
+            session.setModel(pendingModel);
+            setModel(pendingModel);
+            setPendingModel(null);
+            setOverlay("none");
+            setModelFilter(undefined);
+          }}
+          onCancel={() => {
+            setPendingModel(null);
+            setOverlay("model");
           }}
         />
       )}

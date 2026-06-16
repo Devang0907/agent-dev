@@ -52,12 +52,12 @@ export function ModelSelector({ theme, settings, filter, onSelect, onClose }: Mo
       <LeftBorder theme={theme} borderColor={theme.borderActive}>
         <Text color={theme.text} bold>/model</Text>
         <Text color={theme.textMuted}> ↑↓ navigate · Enter select · Esc close</Text>
+        <Text color={theme.textMuted}> Models without a key will prompt for an API key</Text>
         {filter && <Text color={theme.textMuted}> filter: {filter}</Text>}
 
         <Box flexDirection="column" marginTop={1}>
           {filtered.length === 0 && <Text color={theme.textMuted}>No models match</Text>}
           {filtered.map((m, i) => {
-            const hasKey = hasProviderAuth(m.provider, settings);
             const selected = i === safeIndex;
             const showHeader = m.provider !== lastProvider;
             lastProvider = m.provider;
@@ -72,7 +72,6 @@ export function ModelSelector({ theme, settings, filter, onSelect, onClose }: Mo
                 <Text color={selected ? theme.primary : theme.text}>
                   {selected ? "› " : "  "}
                   {m.name}
-                  {!hasKey && <Text color={theme.warning}> (no key)</Text>}
                   {selected && <Text color={theme.textMuted}> {modelRef(m)}</Text>}
                 </Text>
               </Box>

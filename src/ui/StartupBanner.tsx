@@ -2,93 +2,48 @@ import React, { memo } from "react";
 import { Box, Text } from "ink";
 import type { ThemeColors } from "./theme.js";
 
-const INNER = 42;
+/**
+ * 5x7 block-letter glyphs for the "AGENT-DEV" wordmark.
+ * "█" = lit pixel, " " = empty pixel. Every glyph is exactly 5 columns
+ * wide and 7 rows tall, so glyphs line up cleanly when concatenated
+ * row-by-row to spell out a word.
+ */
+const GLYPH_HEIGHT = 7;
+const GLYPH_WIDTH = 5;
 
-const CHAR_COLORS: Record<string, string> = {
-  "#": "gray",
-  "@": "cyan",
-  "$": "green",
-  "%": "yellow",
-  "^": "blue",
-  "&": "magenta",
-  "*": "white",
+const GLYPHS: Record<string, string[]> = {
+  A: ["  █  ", " █ █ ", "█   █", "█████", "█   █", "█   █", "█   █"],
+  G: [" ███ ", "█    ", "█    ", "█ ███", "█   █", "█   █", " ███ "],
+  E: ["█████", "█    ", "█    ", "████ ", "█    ", "█    ", "█████"],
+  N: ["█   █", "██  █", "█ █ █", "█  ██", "█   █", "█   █", "█   █"],
+  T: ["█████", "  █  ", "  █  ", "  █  ", "  █  ", "  █  ", "  █  "],
+  "-": ["     ", "     ", "     ", "█████", "     ", "     ", "     "],
+  D: ["████ ", "█   █", "█   █", "█   █", "█   █", "█   █", "████ "],
+  V: ["█   █", "█   █", "█   █", "█   █", " █ █ ", " █ █ ", "  █  "],
 };
 
-const BOX_CHARS = "+-|";
+const BLANK_GLYPH = Array(GLYPH_HEIGHT).fill(" ".repeat(GLYPH_WIDTH));
 
-function colorForChar(char: string, theme: ThemeColors): string {
-  if (BOX_CHARS.includes(char) || char === " ") return theme.border;
-  return CHAR_COLORS[char] ?? theme.text;
+/** Wordmark color — matches the brand logo regardless of active theme. */
+const LOGO_COLOR = "#F2A154";
+
+function glyphFor(char: string): string[] {
+  return GLYPHS[char.toUpperCase()] ?? BLANK_GLYPH;
 }
 
-function ColoredLine({ line, theme }: { line: string; theme: ThemeColors }) {
-  const segments: { text: string; color: string }[] = [];
-  let run = "";
-  let runColor = "";
-
-  for (const char of line) {
-    const color = colorForChar(char, theme);
-    if (run && color !== runColor) {
-      segments.push({ text: run, color: runColor });
-      run = char;
-      runColor = color;
-    } else {
-      run += char;
-      runColor = color;
-    }
+/** Builds the word as GLYPH_HEIGHT lines of text, gap columns between letters. */
+function buildBlockLines(word: string, gap = 1): string[] {
+  const glyphs = word.split("").map(glyphFor);
+  const gapStr = " ".repeat(gap);
+  const lines: string[] = [];
+  for (let row = 0; row < GLYPH_HEIGHT; row++) {
+    lines.push(glyphs.map((g) => g[row]).join(gapStr));
   }
-  if (run) segments.push({ text: run, color: runColor });
-
-  return (
-    <Text>
-      {segments.map((s, i) => (
-        <Text key={i} color={s.color}>{s.text}</Text>
-      ))}
-    </Text>
-  );
+  return lines;
 }
 
-function center(text: string): string {
-  if (text.length >= INNER) return text.slice(0, INNER);
-  const pad = INNER - text.length;
-  const left = Math.floor(pad / 2);
-  return " ".repeat(left) + text + " ".repeat(pad - left);
-}
-
-function row(content: string): string {
-  const inner = content.length > INNER ? content.slice(0, INNER) : content.padEnd(INNER);
-  return "|" + inner + "|";
-}
-
-function border(): string {
-  return "+" + "-".repeat(INNER) + "+";
-}
-
-function buildRobotLines(): string[] {
-  // Every line in `head` is built to the same fixed width (23 chars) so
-  // center() applies identical padding to each one and the face stays
-  // aligned: antenna -> rounded head -> eyes -> mouth grille -> bolts.
-  const head = [
-    "." + "-".repeat(21) + ".", // head top, rounded corners
-    "|" + " ".repeat(6) + "@@" + " ".repeat(5) + "@@" + " ".repeat(6) + "|", // eyes
-    "|" + " ".repeat(21) + "|", // visor gap
-    "|" + " ".repeat(6) + "# # # # #" + " ".repeat(6) + "|", // mouth grille
-    "'" + "-".repeat(21) + "'", // head bottom, rounded corners
-    " ".repeat(9) + "+" + " ".repeat(3) + "+" + " ".repeat(9), // neck bolts
-  ];
-
-  return [
-    border(),
-    row(center("#%@$^&*  AGENT-DEV  *&^$@#%")),
-    row(""),
-    ...head.map((line) => row(center(line))),
-    row(""),
-    border(),
-  ];
-}
-
-const ROBOT_LINES = buildRobotLines();
-const ROBOT_MINI = "<@ @>  AGENT-DEV  <@ @>";
+const LOGO_LINES = buildBlockLines("AGENT-DEV");
+const LOGO_MINI = "AGENT-DEV";
 
 interface StartupBannerProps {
   theme: ThemeColors;
@@ -99,18 +54,26 @@ export const StartupBanner = memo(function StartupBanner({
   theme,
   compact,
 }: StartupBannerProps) {
+  // Falls back to the brand orange; lets a theme override via an
+  // optional `accent` field without forcing it into ThemeColors.
+  const color = (theme as { accent?: string }).accent ?? LOGO_COLOR;
+
   if (compact) {
     return (
       <Box marginBottom={1}>
-        <ColoredLine line={ROBOT_MINI} theme={theme} />
+        <Text color={color} bold>
+          {LOGO_MINI}
+        </Text>
       </Box>
     );
   }
 
   return (
     <Box flexDirection="column" marginBottom={1}>
-      {ROBOT_LINES.map((line, i) => (
-        <ColoredLine key={i} line={line} theme={theme} />
+      {LOGO_LINES.map((line, i) => (
+        <Text key={i} color={color} bold>
+          {line}
+        </Text>
       ))}
     </Box>
   );

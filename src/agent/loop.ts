@@ -37,13 +37,17 @@ async function collectStream(
   let content = "";
   const toolCallMap: Map<number, ToolCall> = new Map();
 
-  const stream = streamChat(model, {
-    messages,
-    tools,
-    systemPrompt,
-    thinkingLevel: settings.thinkingLevel,
-    signal,
-  });
+  const stream = streamChat(
+    model,
+    {
+      messages,
+      tools,
+      systemPrompt,
+      thinkingLevel: settings.thinkingLevel,
+      signal,
+    },
+    settings,
+  );
 
   for await (const event of stream) {
     if (event.type === "text_delta") {
