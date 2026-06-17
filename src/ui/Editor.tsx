@@ -123,10 +123,11 @@ export function Editor({ theme, model, disabled, running, onSubmit }: EditorProp
               <Text color={theme.text}>{value}</Text>
               <BlinkingCursor theme={theme} visible={showCursor} />
             </>
-          ) : showCursor ? (
-            <BlinkingCursor theme={theme} visible={true} />
           ) : (
-            <Text color={theme.textMuted}>{placeholder}</Text>
+            <>
+              <BlinkingCursor theme={theme} visible={showCursor} />
+              <Text color={theme.textMuted}>{placeholder}</Text>
+            </>
           )}
         </Box>
         <Text color={theme.textMuted}>
