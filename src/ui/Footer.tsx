@@ -8,6 +8,7 @@ interface FooterProps {
   workdir: string;
   model: Model;
   theme: ThemeColors;
+  scrollHint?: string;
 }
 
 function shortPath(path: string, max = 56): string {
@@ -15,7 +16,7 @@ function shortPath(path: string, max = 56): string {
   return "…" + path.slice(-(max - 1));
 }
 
-export function Footer({ workdir, model, theme }: FooterProps) {
+export function Footer({ workdir, model, theme, scrollHint }: FooterProps) {
   return (
     <Box
       borderStyle="single"
@@ -25,12 +26,19 @@ export function Footer({ workdir, model, theme }: FooterProps) {
       borderBottom={false}
       paddingX={2}
       marginBottom={1}
+      flexShrink={0}
     >
       <Text color={theme.textMuted}>
         <Text color={theme.primary}>⌂ </Text>
         {shortPath(workdir)}
         {"  "}
         <Text color={theme.text}>{modelRef(model)}</Text>
+        {scrollHint && (
+          <>
+            {"  "}
+            <Text color={theme.warning}>{scrollHint}</Text>
+          </>
+        )}
       </Text>
     </Box>
   );

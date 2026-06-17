@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from "react";
-import { Box, Text, useInput } from "ink";
+import { Box, Text } from "ink";
 import type { ThemeColors } from "./theme.js";
 import type { Model, ProviderId } from "../providers/types.js";
 import { PROVIDER_LABELS } from "../config/models.js";
 import { PROVIDER_ENV_VARS } from "../providers/registry.js";
 import { LeftBorder } from "./LeftBorder.js";
+import { useAppInput } from "./useAppInput.js";
+import { isPrintableTextInput } from "./mouse.js";
 
 interface ApiKeyPromptProps {
   theme: ThemeColors;
@@ -28,7 +30,7 @@ export function ApiKeyPrompt({ theme, provider, model, onSubmit, onCancel }: Api
     return () => clearInterval(id);
   }, []);
 
-  useInput(
+  useAppInput(
     (input, key) => {
       if (key.escape) {
         onCancel();
@@ -46,7 +48,7 @@ export function ApiKeyPrompt({ theme, provider, model, onSubmit, onCancel }: Api
         return;
       }
 
-      if (input && !key.ctrl && !key.meta) {
+      if (input && !key.ctrl && !key.meta && isPrintableTextInput(input)) {
         setValue((v) => v + input);
       }
     },

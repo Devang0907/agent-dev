@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
-import { Box, useInput, useApp, useStdout } from "ink";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { Box, useApp } from "ink";
 import type { AgentSession, SessionEvent } from "../agent/session.js";
 import { ChatView } from "./ChatView.js";
 import { Editor } from "./Editor.js";
@@ -7,16 +7,29 @@ import { Footer } from "./Footer.js";
 import { ModelSelector } from "./ModelSelector.js";
 import { ApiKeyPrompt } from "./ApiKeyPrompt.js";
 import { SettingsView } from "./SettingsView.js";
+import { SessionSelector } from "./SessionSelector.js";
 import { hasProviderAuth, getDefaultModelForProvider } from "../providers/registry.js";
 import type { Model, ProviderId } from "../providers/types.js";
+import type { ChatMessage } from "../providers/types.js";
 import { findModel } from "../config/models.js";
 import type { Settings } from "../config/settings.js";
 import { CommandApprovalPrompt } from "./CommandApprovalPrompt.js";
 import type { PermissionRequest } from "../agent/loop.js";
 import { StartupBanner } from "./StartupBanner.js";
 import { getTheme } from "./theme.js";
-import { scrollViewportToBottom } from "./scroll.js";
 import { formatToolForDisplay } from "./format-tool.js";
+import type { SessionSummary } from "../session/manager.js";
+import { buildChatLines } from "./chat-lines.js";
+import { chatContentWidth, useTerminalSize } from "./layout.js";
+import {
+  chatViewportHeight,
+  effectiveScrollTop,
+  isFollowing,
+  safeTerminalRows,
+} from "./scroll.js";
+import { useMouseScroll } from "./useMouseScroll.js";
+import { WHEEL_SCROLL_LINES } from "./mouse.js";
+import { useAppInput } from "./useAppInput.js";
 
 let nextMessageId = 0;
 
@@ -28,6 +41,19 @@ function toDisplayMessage(
   return { id: nextMessageId++, role, content, toolName };
 }
 
+function chatMessagesToDisplay(messages: ChatMessage[]): DisplayMessage[] {
+  nextMessageId = 0;
+  return messages
+    .filter((m) => m.role === "user" || m.role === "assistant" || m.role === "tool")
+    .map((m) =>
+      toDisplayMessage(
+        m.role as DisplayMessage["role"],
+        m.role === "tool" ? formatToolForDisplay(m.name ?? "tool", m.content) : m.content,
+        m.name,
+      ),
+    );
+}
+
 export interface DisplayMessage {
   id: number;
   role: "user" | "assistant" | "tool";
@@ -35,7 +61,7 @@ export interface DisplayMessage {
   toolName?: string;
 }
 
-type Overlay = "none" | "model" | "settings" | "apiKey" | "commandApproval";
+type Overlay = "none" | "model" | "settings" | "apiKey" | "commandApproval" | "sessions";
 
 interface AppProps {
   session: AgentSession;
@@ -51,14 +77,13 @@ function modelForProvider(provider: ProviderId, settings: Settings): Model {
 
 export function App({ session, workdir, onQuit }: AppProps) {
   const { exit } = useApp();
+  const terminal = useTerminalSize();
+  const terminalRows = safeTerminalRows(terminal.rows);
+  const viewportHeight = chatViewportHeight(terminal.rows);
+  const contentWidth = chatContentWidth(terminal.cols);
+
   const [displayMessages, setDisplayMessages] = useState<DisplayMessage[]>(() =>
-    session.getMessages().map((m) =>
-      toDisplayMessage(
-        m.role === "tool" ? "tool" : m.role === "user" ? "user" : "assistant",
-        m.content,
-        m.name,
-      ),
-    ),
+    chatMessagesToDisplay(session.getMessages()),
   );
   const [streamingText, setStreamingText] = useState("");
   const [overlay, setOverlay] = useState<Overlay>("none");
@@ -68,14 +93,53 @@ export function App({ session, workdir, onQuit }: AppProps) {
   const [settings, setSettings] = useState(session.getSettings());
   const [model, setModel] = useState(session.getModel());
   const [running, setRunning] = useState(false);
-  const [autoFollow, setAutoFollow] = useState(true);
+  /** null = follow latest output */
+  const [scrollOffset, setScrollOffset] = useState<number | null>(null);
   const [pendingCommand, setPendingCommand] = useState<PermissionRequest | null>(null);
+  const [currentSessionId, setCurrentSessionId] = useState(session.getSessionId());
+  const [sessionListRefresh, setSessionListRefresh] = useState(0);
   const streamingRef = useRef("");
-  const autoFollowRef = useRef(true);
   const startupChecked = useRef(false);
 
   const theme = getTheme();
-  const { stdout } = useStdout();
+
+  const chatLines = useMemo(
+    () =>
+      buildChatLines(displayMessages, {
+        width: contentWidth,
+        model,
+        streamingText,
+        running,
+      }),
+    [displayMessages, contentWidth, model, streamingText, running],
+  );
+
+  const maxScroll = Math.max(0, chatLines.length - viewportHeight);
+  const scrollTop = effectiveScrollTop(scrollOffset, maxScroll);
+  const following = isFollowing(scrollOffset, maxScroll);
+
+  const scrollBy = useCallback(
+    (delta: number) => {
+      setScrollOffset((prev) => {
+        const current = effectiveScrollTop(prev, maxScroll);
+        const next = Math.max(0, Math.min(maxScroll, current + delta));
+        return next >= maxScroll ? null : next;
+      });
+    },
+    [maxScroll],
+  );
+
+  const scrollPageUp = useCallback(() => {
+    scrollBy(-viewportHeight);
+  }, [scrollBy, viewportHeight]);
+
+  const scrollPageDown = useCallback(() => {
+    scrollBy(viewportHeight);
+  }, [scrollBy, viewportHeight]);
+
+  const followLatest = useCallback(() => {
+    setScrollOffset(null);
+  }, []);
 
   const openApiKeyPrompt = useCallback(
     (target: Model, returnTo: Overlay = "none") => {
@@ -105,6 +169,18 @@ export function App({ session, workdir, onQuit }: AppProps) {
     [pendingModel, settings, session, apiKeyReturnOverlay],
   );
 
+  const loadSession = useCallback(
+    (summary: SessionSummary) => {
+      session.loadSession(summary.sessionId);
+      setDisplayMessages(chatMessagesToDisplay(session.getMessages()));
+      setStreamingText("");
+      setScrollOffset(null);
+      setCurrentSessionId(summary.sessionId);
+      setOverlay("none");
+    },
+    [session],
+  );
+
   useEffect(() => {
     if (startupChecked.current) return;
     startupChecked.current = true;
@@ -115,27 +191,18 @@ export function App({ session, workdir, onQuit }: AppProps) {
   }, [session, settings, openApiKeyPrompt]);
 
   useEffect(() => {
-    if (autoFollow && streamingText) {
-      scrollViewportToBottom(stdout);
-    }
-  }, [streamingText, autoFollow, stdout]);
-
-  useEffect(() => {
     const handler = (event: SessionEvent) => {
       switch (event.type) {
         case "user_message":
-          autoFollowRef.current = true;
-          setAutoFollow(true);
+          followLatest();
           setDisplayMessages((prev) => [...prev, toDisplayMessage("user", event.content)]);
           setRunning(true);
           streamingRef.current = "";
           setStreamingText("");
-          scrollViewportToBottom(stdout);
           break;
         case "message_start":
           streamingRef.current = "";
           setStreamingText("");
-          if (autoFollowRef.current) scrollViewportToBottom(stdout);
           break;
         case "text_delta":
           streamingRef.current += event.delta;
@@ -190,32 +257,69 @@ export function App({ session, workdir, onQuit }: AppProps) {
         case "model_changed":
           setModel(event.model);
           break;
+        case "session_title":
+          setSessionListRefresh((v) => v + 1);
+          break;
       }
     };
     session.on("event", handler);
     return () => {
       session.off("event", handler);
     };
-  }, [session, model, openApiKeyPrompt, stdout]);
+  }, [session, model, openApiKeyPrompt, followLatest]);
 
-  autoFollowRef.current = autoFollow;
+  const hasChat = displayMessages.length > 0 || streamingText.length > 0;
 
-  useInput(
+  useMouseScroll(
+    (direction) => {
+      if (overlay !== "none") return;
+      scrollBy(direction === "up" ? -WHEEL_SCROLL_LINES : WHEEL_SCROLL_LINES);
+    },
+    { isActive: overlay === "none" && hasChat },
+  );
+
+  useAppInput(
     (input, key) => {
       if (overlay !== "none") return;
+
       if (key.escape && running) {
         session.abort();
         return;
       }
-      if (key.pageUp || (key.upArrow && key.shift)) {
-        autoFollowRef.current = false;
-        setAutoFollow(false);
+
+      const scrollUp =
+        key.pageUp ||
+        (key.upArrow && !key.ctrl && !key.meta) ||
+        (input === "u" && key.ctrl);
+      const scrollDown =
+        key.pageDown ||
+        (key.downArrow && !key.ctrl && !key.meta) ||
+        (input === "d" && key.ctrl);
+
+      if (scrollUp) {
+        if (key.ctrl && input === "u") {
+          scrollBy(-Math.max(1, Math.floor(viewportHeight / 2)));
+        } else if (key.pageUp) {
+          scrollPageUp();
+        } else {
+          scrollBy(-1);
+        }
         return;
       }
+
+      if (scrollDown) {
+        if (key.ctrl && input === "d") {
+          scrollBy(Math.max(1, Math.floor(viewportHeight / 2)));
+        } else if (key.pageDown) {
+          scrollPageDown();
+        } else {
+          scrollBy(1);
+        }
+        return;
+      }
+
       if (input === "g" && key.ctrl) {
-        autoFollowRef.current = true;
-        setAutoFollow(true);
-        scrollViewportToBottom(stdout);
+        followLatest();
       }
     },
     { isActive: overlay === "none" },
@@ -232,7 +336,12 @@ export function App({ session, workdir, onQuit }: AppProps) {
         session.newSession();
         setDisplayMessages([]);
         setStreamingText("");
-        setAutoFollow(true);
+        setScrollOffset(null);
+        setCurrentSessionId(session.getSessionId());
+        return;
+      }
+      if (value === "/sessions") {
+        setOverlay("sessions");
         return;
       }
       if (value === "/settings") {
@@ -257,26 +366,43 @@ export function App({ session, workdir, onQuit }: AppProps) {
     [session, running, onQuit, exit, model, settings, openApiKeyPrompt],
   );
 
-  const hasChat = displayMessages.length > 0 || streamingText.length > 0;
+  const scrollHint =
+    hasChat && maxScroll > 0
+      ? following
+        ? undefined
+        : `↑ ${scrollTop} / ${maxScroll}`
+      : undefined;
 
   return (
-    <Box flexDirection="column">
-      {!hasChat && (
+    <Box flexDirection="column" height={terminalRows}>
+      {overlay === "sessions" ? (
+        <SessionSelector
+          theme={theme}
+          currentSessionId={currentSessionId}
+          viewportHeight={viewportHeight}
+          contentWidth={contentWidth}
+          refreshKey={sessionListRefresh}
+          onSelect={loadSession}
+          onClose={() => setOverlay("none")}
+        />
+      ) : hasChat ? (
+        <ChatView
+          messages={displayMessages}
+          theme={theme}
+          model={model}
+          streamingText={streamingText}
+          running={running}
+          viewportHeight={viewportHeight}
+          scrollTop={scrollTop}
+          contentWidth={contentWidth}
+        />
+      ) : (
         <Box paddingX={2} marginBottom={1} flexShrink={0}>
           <StartupBanner theme={theme} />
         </Box>
       )}
 
-      <ChatView
-        messages={displayMessages}
-        theme={theme}
-        model={model}
-        streamingText={streamingText}
-        running={running}
-        autoFollow={autoFollow}
-      />
-
-      <Footer workdir={workdir} model={model} theme={theme} />
+      <Footer workdir={workdir} model={model} theme={theme} scrollHint={scrollHint} />
 
       {overlay === "none" && (
         <Box flexShrink={0}>
@@ -286,10 +412,6 @@ export function App({ session, workdir, onQuit }: AppProps) {
             disabled={running}
             running={running}
             onSubmit={handleSubmit}
-            onPauseFollow={() => {
-              autoFollowRef.current = false;
-              setAutoFollow(false);
-            }}
           />
         </Box>
       )}

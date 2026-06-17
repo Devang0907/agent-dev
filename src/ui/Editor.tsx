@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Box, Text, useInput } from "ink";
+import { Box, Text } from "ink";
 import type { ThemeColors } from "./theme.js";
 import type { Model } from "../providers/types.js";
 import { modelRef } from "../config/models.js";
@@ -10,6 +10,8 @@ import {
 } from "./slash-commands.js";
 import { Panel } from "./Panel.js";
 import { SPINNER_FRAMES } from "./theme.js";
+import { useAppInput } from "./useAppInput.js";
+import { isPrintableTextInput } from "./mouse.js";
 
 interface EditorProps {
   theme: ThemeColors;
@@ -17,7 +19,6 @@ interface EditorProps {
   disabled?: boolean;
   running?: boolean;
   onSubmit: (value: string) => void;
-  onPauseFollow?: () => void;
 }
 
 function BlinkingCursor({ theme, visible }: { theme: ThemeColors; visible: boolean }) {
@@ -25,7 +26,7 @@ function BlinkingCursor({ theme, visible }: { theme: ThemeColors; visible: boole
   return <Text color={theme.primary}>▌</Text>;
 }
 
-export function Editor({ theme, model, disabled, running, onSubmit, onPauseFollow }: EditorProps) {
+export function Editor({ theme, model, disabled, running, onSubmit }: EditorProps) {
   const [value, setValue] = useState("");
   const [suggestions, setSuggestions] = useState<typeof SLASH_COMMANDS[number][]>([]);
   const [spinIdx, setSpinIdx] = useState(0);
@@ -51,7 +52,7 @@ export function Editor({ theme, model, disabled, running, onSubmit, onPauseFollo
     }
   };
 
-  useInput(
+  useAppInput(
     (input, key) => {
       if (disabled) return;
 
@@ -77,11 +78,6 @@ export function Editor({ theme, model, disabled, running, onSubmit, onPauseFollo
         return;
       }
 
-      if ((key.pageUp || key.upArrow) && !key.ctrl && !key.meta) {
-        onPauseFollow?.();
-        return;
-      }
-
       if (key.backspace || key.delete) {
         const newVal = value.slice(0, -1);
         setValue(newVal);
@@ -89,7 +85,7 @@ export function Editor({ theme, model, disabled, running, onSubmit, onPauseFollo
         return;
       }
 
-      if (input && !key.ctrl && !key.meta) {
+      if (input && !key.ctrl && !key.meta && isPrintableTextInput(input)) {
         const newVal = value + input;
         setValue(newVal);
         updateSuggestions(newVal);
@@ -146,7 +142,7 @@ export function Editor({ theme, model, disabled, running, onSubmit, onPauseFollo
             </Text>
           ) : (
             <Text color={theme.textMuted}>
-              Tab completes /commands · scroll freely · Ctrl+G follow
+              Tab completes /commands · ↑↓ wheel scroll · Ctrl+G latest
             </Text>
           )}
         </Box>

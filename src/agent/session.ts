@@ -6,11 +6,13 @@ import { setDefaultModel, saveSettings } from "../config/settings.js";
 import { getAvailableModels, getDefaultModelForProvider } from "../providers/registry.js";
 import { runAgentLoop, type AgentEvent, type PermissionRequest } from "./loop.js";
 import { SessionManager } from "../session/manager.js";
+import { generateSessionTitle, fallbackTitle } from "../session/title.js";
 
 export type SessionEvent =
   | AgentEvent
   | { type: "user_message"; content: string }
   | { type: "model_changed"; model: Model }
+  | { type: "session_title"; title: string }
   | { type: "permission_request"; request: PermissionRequest };
 
 export class AgentSession extends EventEmitter {
@@ -54,6 +56,10 @@ export class AgentSession extends EventEmitter {
 
   getMessages(): ChatMessage[] {
     return [...this.messages];
+  }
+
+  getSessionId(): string {
+    return this.sessionManager.sessionId;
   }
 
   isRunning(): boolean {
@@ -100,10 +106,15 @@ export class AgentSession extends EventEmitter {
     if (this.running) return;
     this.running = true;
 
+    const isFirstMessage = this.messages.length === 0;
     const userMsg: ChatMessage = { role: "user", content };
     this.messages.push(userMsg);
     this.sessionManager.appendMessage(userMsg);
     this.emit("event", { type: "user_message", content } satisfies SessionEvent);
+
+    if (isFirstMessage) {
+      void this.generateSessionTitle(content);
+    }
 
     this.abortController = new AbortController();
 
@@ -132,8 +143,29 @@ export class AgentSession extends EventEmitter {
   }
 
   newSession(): void {
+    if (this.running) return;
     this.messages = [];
-    this.sessionManager.clear();
+    this.sessionManager = new SessionManager(undefined, this.workdir);
+    this.sessionManager.saveAsLast();
+  }
+
+  loadSession(sessionId: string): void {
+    if (this.running) return;
+    this.sessionManager = new SessionManager(sessionId);
+    this.messages = this.sessionManager.getMessages();
+    this.sessionManager.saveAsLast();
+  }
+
+  private async generateSessionTitle(firstMessage: string): Promise<void> {
+    const quick = fallbackTitle(firstMessage);
+    this.sessionManager.setTitle(quick);
+    this.emit("event", { type: "session_title", title: quick } satisfies SessionEvent);
+
+    const aiTitle = await generateSessionTitle(this.model, this.settings, firstMessage);
+    if (aiTitle !== quick) {
+      this.sessionManager.setTitle(aiTitle);
+      this.emit("event", { type: "session_title", title: aiTitle } satisfies SessionEvent);
+    }
   }
 
   getAvailableModels(): Model[] {

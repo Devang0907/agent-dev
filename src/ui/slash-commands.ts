@@ -1,6 +1,7 @@
 export const SLASH_COMMANDS = [
   { cmd: "/model", desc: "Select provider & model" },
   { cmd: "/settings", desc: "Thinking level & API keys" },
+  { cmd: "/sessions", desc: "Browse saved chat sessions" },
   { cmd: "/new", desc: "New session" },
   { cmd: "/quit", desc: "Exit" },
 ] as const;
