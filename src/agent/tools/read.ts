@@ -1,6 +1,9 @@
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { resolve, isAbsolute } from "node:path";
+import { platform as osPlatform } from "node:os";
 import type { ToolDefinition } from "../../providers/types.js";
+import { getShellConfig } from "../platform.js";
+import { executeShellCommand } from "./shell.js";
 
 const DEFAULT_WORKDIR = process.cwd();
 
@@ -98,7 +101,10 @@ export async function executeEdit(
 
 export const bashTool: ToolDefinition = {
   name: "bash",
-  description: "Run a shell command in the project directory",
+  description:
+    osPlatform() === "win32"
+      ? "Run a PowerShell command in the project directory (Windows). Chain with ; not &&. Use non-interactive flags for npx/npm."
+      : "Run a bash shell command in the project directory",
   parameters: {
     type: "object",
     properties: {
@@ -113,20 +119,10 @@ export async function executeBash(
   args: { command: string },
   workdir = DEFAULT_WORKDIR,
 ): Promise<string> {
-  const { exec } = await import("node:child_process");
-  const { promisify } = await import("node:util");
-  const execAsync = promisify(exec);
-  try {
-    const { stdout, stderr } = await execAsync(args.command, {
-      cwd: workdir,
-      timeout: 120000,
-      maxBuffer: 1024 * 1024,
-    });
-    const out = stdout + (stderr ? `\n${stderr}` : "");
-    return out.trim() || "(no output)";
-  } catch (err: unknown) {
-    const e = err as { stdout?: string; stderr?: string; message?: string };
-    const out = (e.stdout ?? "") + (e.stderr ? `\n${e.stderr}` : "");
-    return out.trim() || (e.message ?? "Command failed");
+  const shell = getShellConfig();
+  const result = await executeShellCommand(args.command, workdir);
+  if (result.startsWith("Error:")) {
+    return `${result}\n(shell: ${shell.name})`;
   }
+  return result;
 }

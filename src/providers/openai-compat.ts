@@ -29,16 +29,63 @@ export function normalizeToolCalls(toolCalls: ToolCall[]): ToolCall[] {
 }
 
 /** Recover tool calls Groq/Llama sometimes emit as malformed text instead of structured tool_calls. */
+function unescapeJsonString(value: string): string {
+  return value
+    .replace(/\\n/g, "\n")
+    .replace(/\\t/g, "\t")
+    .replace(/\\"/g, '"')
+    .replace(/\\\\/g, "\\");
+}
+
+function parseToolArguments(raw: string): string | null {
+  const body = raw.replace(/^[\[\]\s]*/, "").trim();
+  if (!body.startsWith("{")) return null;
+
+  try {
+    JSON.parse(body);
+    return body;
+  } catch {
+    // Groq often truncates JSON — extract known fields.
+  }
+
+  const commandMatch = body.match(/"command"\s*:\s*"((?:\\.|[^"\\])*)"/);
+  if (commandMatch) {
+    return JSON.stringify({ command: unescapeJsonString(commandMatch[1]!) });
+  }
+
+  const truncatedCommand = body.match(/"command"\s*:\s*"([\s\S]+)$/);
+  if (truncatedCommand) {
+    const command = unescapeJsonString(truncatedCommand[1]!.replace(/\\+$/, ""));
+    return JSON.stringify({ command });
+  }
+
+  const queryMatch = body.match(/"query"\s*:\s*"((?:\\.|[^"\\])*)"/);
+  if (queryMatch) {
+    return JSON.stringify({ query: unescapeJsonString(queryMatch[1]!) });
+  }
+
+  const pathMatch = body.match(/"path"\s*:\s*"((?:\\.|[^"\\])*)"/);
+  if (pathMatch) {
+    return JSON.stringify({ path: unescapeJsonString(pathMatch[1]!) });
+  }
+
+  return null;
+}
+
+function pushRecovered(results: ToolCall[], name: string, args: string): void {
+  results.push({
+    id: `recovered_${Date.now()}_${results.length}`,
+    name,
+    arguments: args,
+  });
+}
+
 export function parseMalformedToolCalls(text: string): ToolCall[] {
   const results: ToolCall[] = [];
   if (!text) return results;
 
-  let i = 0;
   const patterns = [
-    // Groq: <function=web_search{"query":"..."}</function>
-    // Groq: <function=web_search {"query": "..."} </function>
-    /<function=([a-zA-Z0-9_]+)\s*(\{[\s\S]*?\})\s*<\/function>/gi,
-    // Groq: <function=web_search>{"query":"..."}</function>
+    /<function=([a-zA-Z0-9_]+)\s*(?:\[\])?\s*(\{[\s\S]*?\})\s*<\/function>/gi,
     /<function=([a-zA-Z0-9_]+)\s*>\s*(\{[\s\S]*?\})\s*<\/function>/gi,
     /<tool_call>\s*([a-zA-Z0-9_]+)\s*(\{[\s\S]*?\})\s*<\/tool_call>/gi,
   ];
@@ -48,14 +95,8 @@ export function parseMalformedToolCalls(text: string): ToolCall[] {
     let match: RegExpExecArray | null;
     while ((match = re.exec(text)) !== null) {
       const name = match[1]!.trim();
-      const args = match[2]!.trim();
-      if (name && args.startsWith("{")) {
-        results.push({
-          id: `recovered_${Date.now()}_${i++}`,
-          name,
-          arguments: args,
-        });
-      }
+      const args = parseToolArguments(match[2]!);
+      if (name && args) pushRecovered(results, name, args);
     }
     if (results.length > 0) break;
   }
@@ -65,14 +106,18 @@ export function parseMalformedToolCalls(text: string): ToolCall[] {
     let match: RegExpExecArray | null;
     while ((match = looseRe.exec(text)) !== null) {
       const name = match[1]!.trim();
-      const jsonMatch = match[2]!.match(/\{[\s\S]*\}/);
-      if (name && jsonMatch) {
-        results.push({
-          id: `recovered_${Date.now()}_${i++}`,
-          name,
-          arguments: jsonMatch[0].trim(),
-        });
-      }
+      const args = parseToolArguments(match[2]!);
+      if (name && args) pushRecovered(results, name, args);
+    }
+  }
+
+  if (results.length === 0) {
+    const truncatedRe = /<function=([a-zA-Z0-9_]+)\s*(?:\[\])?\s*(\{[\s\S]+)/gi;
+    let match: RegExpExecArray | null;
+    while ((match = truncatedRe.exec(text)) !== null) {
+      const name = match[1]!.trim();
+      const args = parseToolArguments(match[2]!);
+      if (name && args) pushRecovered(results, name, args);
     }
   }
 

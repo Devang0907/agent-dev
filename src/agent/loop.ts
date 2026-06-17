@@ -7,6 +7,7 @@ import { streamChat } from "../providers/registry.js";
 import type { ChatMessage, Model, ToolCall } from "../providers/types.js";
 import type { Settings } from "../config/settings.js";
 import { getToolDefinitions, executeTool, PERMISSION_REQUIRED_TOOLS } from "./tools/index.js";
+import { getPlatformContext } from "./platform.js";
 
 export interface PermissionRequest {
   toolCallId: string;
@@ -22,9 +23,11 @@ const DEFAULT_SYSTEM_PROMPT = `You are a helpful coding assistant with access to
 When the user asks you to create or modify files, call write or edit once with the full file content, then reply briefly to confirm.
 Use web_search when you need current information, documentation, or facts from the internet.
 Shell commands via bash require user approval before they run — propose the exact command you need.
+Never run long-lived dev servers (npm run dev, npm start) — they time out. Use npm run build to verify, then tell the user how to start the dev server locally.
 Do NOT call the same tool repeatedly with the same arguments. One successful write is enough.
 When calling tools, use the function-calling API with valid JSON arguments only (e.g. web_search: {"query": "search terms"}).
-Working directory: ${process.cwd()}`;
+
+${getPlatformContext()}`;
 
 function systemPromptForModel(model: Model, base = DEFAULT_SYSTEM_PROMPT): string {
   if (model.provider === "groq") {
