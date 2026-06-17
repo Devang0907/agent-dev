@@ -1,6 +1,6 @@
 # agent-dev
 
-A minimal pi-like terminal coding agent with an Ink UI. Chat with an AI that can read, write, edit files, search the web, and run shell commands (with your approval).
+A minimal pi-like terminal coding agent with an Ink UI. Chat with an AI that can search, edit, and verify code, run git/shell commands (with approval), and more.
 
 ## Quick start
 
@@ -51,17 +51,43 @@ Config and sessions are stored in `~/.agent-dev/`.
 
 ## Tools
 
-The agent has five built-in tools:
+The agent has fourteen built-in tools:
 
 | Tool | Description |
 |------|-------------|
 | `read` | Read a file in the project directory |
 | `write` | Create or overwrite a file |
 | `edit` | Replace text in a file |
-| `web_search` | Search the internet (DuckDuckGo, no extra API key) |
-| `bash` | Run a shell command — **requires your approval** before execution |
+| `diff` | Preview unified diff before applying changes |
+| `grep` | Search codebase (ripgrep; on Windows uses **findstr**, then PowerShell) |
+| `git` | Git status, diff, log, commit, etc. (writes need approval) |
+| `bash` | Run a shell command — **requires approval** |
+| `web_search` | Search the internet (DuckDuckGo / Google News) |
+| `docs` | Look up npm READMEs, MDN, or fetch a docs URL |
+| `memory` | Store/recall long-term facts in `~/.agent-dev/memory.json` |
+| `plan` | Create and track multi-step task plans |
+| `database` | Run SQL on SQLite files (mutations need approval) |
+| `verify` | Auto-run tests/build from `package.json` scripts |
+| `mcp` | Call tools from MCP servers (see below) |
 
-File operations are restricted to the current working directory. When the agent proposes a shell command, the UI prompts you to approve (`y`) or deny (`n` / Esc).
+File operations are restricted to the current working directory. Shell commands, git writes, SQL mutations, and MCP tool calls prompt for approval (`y` / `n`).
+
+### MCP configuration
+
+Add servers to `~/.agent-dev/mcp.json`:
+
+```json
+{
+  "servers": {
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "D:/projects"]
+    }
+  }
+}
+```
+
+Use the `mcp` tool with `list_servers`, `list_tools`, and `call_tool` actions.
 
 ## License
 

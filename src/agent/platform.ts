@@ -85,6 +85,7 @@ export function getPlatformContext(): string {
       "Examples: New-Item -ItemType Directory -Force todo-app; Set-Location todo-app",
       "For npx/npm scaffolding, always use non-interactive flags (--yes, -y, --defaults) and set CI=1.",
       "Do not use mkdir -p, rm -rf, or touch — use PowerShell equivalents or the write tool.",
+      "Use the grep tool for codebase search (findstr on Windows when ripgrep is not installed).",
       "Dev servers (npm run dev, next dev) start in the background via bash and return a localhost URL.",
       "Do not run npm audit fix unless the user explicitly asks.",
     );

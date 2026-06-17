@@ -1,23 +1,9 @@
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
-import { resolve, isAbsolute } from "node:path";
 import { platform as osPlatform } from "node:os";
 import type { ToolDefinition } from "../../providers/types.js";
 import { getShellConfig } from "../platform.js";
 import { executeShellCommand } from "./shell.js";
-
-const DEFAULT_WORKDIR = process.cwd();
-
-function resolvePath(path: string, workdir = DEFAULT_WORKDIR): string {
-  return isAbsolute(path) ? path : resolve(workdir, path);
-}
-
-function assertWithinWorkdir(path: string, workdir = DEFAULT_WORKDIR): void {
-  const resolved = resolve(path);
-  const root = resolve(workdir);
-  if (!resolved.startsWith(root)) {
-    throw new Error(`Path outside working directory: ${path}`);
-  }
-}
+import { resolvePath, assertWithinWorkdir } from "./paths.js";
 
 export const readTool: ToolDefinition = {
   name: "read",
@@ -32,7 +18,7 @@ export const readTool: ToolDefinition = {
   },
 };
 
-export async function executeRead(args: { path: string }, workdir = DEFAULT_WORKDIR): Promise<string> {
+export async function executeRead(args: { path: string }, workdir: string): Promise<string> {
   const filePath = resolvePath(args.path, workdir);
   assertWithinWorkdir(filePath, workdir);
   if (!existsSync(filePath)) {
@@ -58,7 +44,7 @@ export const writeTool: ToolDefinition = {
 
 export async function executeWrite(
   args: { path: string; content: string },
-  workdir = DEFAULT_WORKDIR,
+  workdir: string,
 ): Promise<string> {
   const filePath = resolvePath(args.path, workdir);
   assertWithinWorkdir(filePath, workdir);
@@ -83,7 +69,7 @@ export const editTool: ToolDefinition = {
 
 export async function executeEdit(
   args: { path: string; old_string: string; new_string: string },
-  workdir = DEFAULT_WORKDIR,
+  workdir: string,
 ): Promise<string> {
   const filePath = resolvePath(args.path, workdir);
   assertWithinWorkdir(filePath, workdir);
@@ -117,7 +103,7 @@ export const bashTool: ToolDefinition = {
 
 export async function executeBash(
   args: { command: string },
-  workdir = DEFAULT_WORKDIR,
+  workdir: string,
 ): Promise<string> {
   const shell = getShellConfig();
   const result = await executeShellCommand(args.command, workdir);

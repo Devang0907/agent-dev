@@ -10,6 +10,15 @@ import {
   executeBash,
 } from "./read.js";
 import { webSearchTool, executeWebSearch } from "./search.js";
+import { grepTool, executeGrep } from "./grep.js";
+import { gitTool, executeGit, isGitWriteAction, formatGitPermissionCommand } from "./git.js";
+import { diffTool, executeDiff } from "./diff.js";
+import { memoryTool, executeMemory } from "./memory.js";
+import { planTool, executePlan } from "./plan.js";
+import { databaseTool, executeDatabase, isSelectOnlyQuery, formatDatabasePermissionCommand } from "./database.js";
+import { docsTool, executeDocs } from "./docs.js";
+import { verifyTool, executeVerify } from "./verify.js";
+import { mcpTool, executeMcp, formatMcpPermissionCommand } from "./mcp.js";
 
 export interface AgentTool {
   definition: ToolDefinition;
@@ -20,11 +29,37 @@ export const BUILTIN_TOOLS: AgentTool[] = [
   { definition: readTool, execute: (args, wd) => executeRead(args as { path: string }, wd) },
   { definition: writeTool, execute: (args, wd) => executeWrite(args as { path: string; content: string }, wd) },
   { definition: editTool, execute: (args, wd) => executeEdit(args as { path: string; old_string: string; new_string: string }, wd) },
+  { definition: diffTool, execute: (args, wd) => executeDiff(args as { path: string; new_content?: string; old_string?: string; new_string?: string }, wd) },
+  { definition: grepTool, execute: (args, wd) => executeGrep(args as { pattern: string; path?: string; glob?: string; case_insensitive?: boolean; context?: number }, wd) },
+  { definition: gitTool, execute: (args, wd) => executeGit(args as { action: string; args?: string }, wd) },
   { definition: bashTool, execute: (args, wd) => executeBash(args as { command: string }, wd) },
   { definition: webSearchTool, execute: (args) => executeWebSearch(args as { query: string }) },
+  { definition: docsTool, execute: (args) => executeDocs(args as { query: string; source?: string; url?: string }) },
+  { definition: memoryTool, execute: (args) => executeMemory(args as { action: string; key?: string; value?: string }) },
+  { definition: planTool, execute: (args) => executePlan(args as { action: string; title?: string; tasks?: string[]; task_id?: string; status?: string }) },
+  { definition: databaseTool, execute: (args, wd) => executeDatabase(args as { database: string; query: string }, wd) },
+  { definition: verifyTool, execute: (args, wd) => executeVerify(args as { command?: string; type?: string }, wd) },
+  { definition: mcpTool, execute: (args) => executeMcp(args as { action: string; server?: string; tool?: string; arguments?: Record<string, unknown> }) },
 ];
 
+/** @deprecated Use needsToolPermission instead */
 export const PERMISSION_REQUIRED_TOOLS = new Set(["bash"]);
+
+export function needsToolPermission(name: string, args: Record<string, unknown>): boolean {
+  if (name === "bash") return true;
+  if (name === "git") return isGitWriteAction(String(args.action ?? ""));
+  if (name === "database") return !isSelectOnlyQuery(String(args.query ?? ""));
+  if (name === "mcp") return String(args.action ?? "").toLowerCase() === "call_tool";
+  return false;
+}
+
+export function formatPermissionCommand(name: string, args: Record<string, unknown>): string {
+  if (name === "bash") return String(args.command ?? "");
+  if (name === "git") return formatGitPermissionCommand(args);
+  if (name === "database") return formatDatabasePermissionCommand(args);
+  if (name === "mcp") return formatMcpPermissionCommand(args);
+  return name;
+}
 
 export function getToolDefinitions(): ToolDefinition[] {
   return BUILTIN_TOOLS.map((t) => t.definition);

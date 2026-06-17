@@ -34,7 +34,7 @@ export function CommandApprovalPrompt({
     <Box flexDirection="column" marginX={2} marginTop={1} marginBottom={1}>
       <LeftBorder theme={theme} borderColor={theme.warning}>
         <Text color={theme.text} bold>
-          Run shell command?
+          Approve this action?
         </Text>
         <Text color={theme.textMuted}> y approve · n or Esc deny</Text>
 

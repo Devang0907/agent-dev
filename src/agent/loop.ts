@@ -6,7 +6,9 @@ import {
 import { streamChat } from "../providers/registry.js";
 import type { ChatMessage, Model, ToolCall } from "../providers/types.js";
 import type { Settings } from "../config/settings.js";
-import { getToolDefinitions, executeTool, PERMISSION_REQUIRED_TOOLS } from "./tools/index.js";
+import { getToolDefinitions, executeTool, needsToolPermission, formatPermissionCommand } from "./tools/index.js";
+import { loadMemorySummary } from "./tools/memory.js";
+import { loadPlanSummary } from "./tools/plan.js";
 import { getPlatformContext } from "./platform.js";
 
 export interface PermissionRequest {
@@ -16,17 +18,33 @@ export interface PermissionRequest {
   command: string;
 }
 
-const MAX_TOOL_ROUNDS = 6;
+const MAX_TOOL_ROUNDS = 10;
 const MAX_SAME_TOOL_CALLS = 2;
 
-const DEFAULT_SYSTEM_PROMPT = `You are a helpful coding assistant with access to tools: read, write, edit, bash, and web_search.
-When the user asks you to create or modify files, call write or edit once with the full file content, then reply briefly to confirm.
-Use web_search for news and current events. When headlines are returned, list them as a numbered list using the exact titles — do not give vague category summaries.
-Shell commands via bash require user approval. Dev servers (npm run dev, npm start) run in the background and return a URL.
+const TOOL_LIST =
+  "read, write, edit, diff, grep, git, bash, web_search, docs, memory, plan, database, verify, mcp";
+
+const DEFAULT_SYSTEM_PROMPT = `You are a helpful coding assistant with tools: ${TOOL_LIST}.
+Inspect the codebase (grep, read) before making changes. Use diff to preview edits when helpful.
+For multi-step work, create a plan first. Store important facts in memory for future sessions.
+Use docs for library/API documentation; web_search for news and current events.
+Use verify after code changes to run tests when a test script exists.
+git write actions, bash, database mutations, and mcp call_tool require user approval.
+When modifying files, call write or edit once with the full content, then reply briefly to confirm.
 Do NOT call the same tool repeatedly with the same arguments. One successful write is enough.
-When calling tools, use the function-calling API with valid JSON arguments only (e.g. web_search: {"query": "search terms"}).
+When calling tools, use the function-calling API with valid JSON arguments only.
 
 ${getPlatformContext()}`;
+
+function buildSystemPrompt(base = DEFAULT_SYSTEM_PROMPT): string {
+  const memory = loadMemorySummary();
+  const plan = loadPlanSummary();
+  const extras: string[] = [];
+  if (memory) extras.push("Stored memories:\n" + memory);
+  if (plan) extras.push("Active plan:\n" + plan);
+  if (extras.length === 0) return base;
+  return `${base}\n\n${extras.join("\n\n")}`;
+}
 
 function systemPromptForModel(model: Model, base = DEFAULT_SYSTEM_PROMPT): string {
   if (model.provider === "groq") {
@@ -127,14 +145,14 @@ async function runToolBatch(
     }
 
     let result: string;
-    const needsPermission = PERMISSION_REQUIRED_TOOLS.has(tc.name);
+    const needsPermission = needsToolPermission(tc.name, args);
 
     if (needsPermission && onPermissionRequest) {
       const approved = await onPermissionRequest({
         toolCallId: tc.id,
         name: tc.name,
         args,
-        command: String(args.command ?? ""),
+        command: formatPermissionCommand(tc.name, args),
       });
       result = approved
         ? await executeTool(tc.name, args, workdir)
@@ -233,7 +251,7 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<ChatMessa
 
   const context = [...messages];
   const callCounts = new Map<string, number>();
-  const effectivePrompt = systemPromptForModel(model, systemPrompt);
+  const effectivePrompt = systemPromptForModel(model, buildSystemPrompt(systemPrompt));
   let toolRound = 0;
 
   while (true) {
