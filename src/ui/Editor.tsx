@@ -17,6 +17,7 @@ interface EditorProps {
   disabled?: boolean;
   running?: boolean;
   onSubmit: (value: string) => void;
+  onPauseFollow?: () => void;
 }
 
 function BlinkingCursor({ theme, visible }: { theme: ThemeColors; visible: boolean }) {
@@ -24,7 +25,7 @@ function BlinkingCursor({ theme, visible }: { theme: ThemeColors; visible: boole
   return <Text color={theme.primary}>▌</Text>;
 }
 
-export function Editor({ theme, model, disabled, running, onSubmit }: EditorProps) {
+export function Editor({ theme, model, disabled, running, onSubmit, onPauseFollow }: EditorProps) {
   const [value, setValue] = useState("");
   const [suggestions, setSuggestions] = useState<typeof SLASH_COMMANDS[number][]>([]);
   const [spinIdx, setSpinIdx] = useState(0);
@@ -73,6 +74,11 @@ export function Editor({ theme, model, disabled, running, onSubmit }: EditorProp
             setSuggestions(matchSlashCommands(suggestions[0].cmd));
           }
         }
+        return;
+      }
+
+      if ((key.pageUp || key.upArrow) && !key.ctrl && !key.meta) {
+        onPauseFollow?.();
         return;
       }
 
@@ -140,7 +146,7 @@ export function Editor({ theme, model, disabled, running, onSubmit }: EditorProp
             </Text>
           ) : (
             <Text color={theme.textMuted}>
-              Tab completes /commands
+              Tab completes /commands · scroll freely · Ctrl+G follow
             </Text>
           )}
         </Box>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { Box, useInput, useApp } from "ink";
+import { Box, useInput, useApp, useStdout } from "ink";
 import type { AgentSession, SessionEvent } from "../agent/session.js";
 import { ChatView } from "./ChatView.js";
 import { Editor } from "./Editor.js";
@@ -11,16 +11,30 @@ import { hasProviderAuth, getDefaultModelForProvider } from "../providers/regist
 import type { Model, ProviderId } from "../providers/types.js";
 import { findModel } from "../config/models.js";
 import type { Settings } from "../config/settings.js";
+import { CommandApprovalPrompt } from "./CommandApprovalPrompt.js";
+import type { PermissionRequest } from "../agent/loop.js";
 import { StartupBanner } from "./StartupBanner.js";
 import { getTheme } from "./theme.js";
+import { scrollViewportToBottom } from "./scroll.js";
+
+let nextMessageId = 0;
+
+function toDisplayMessage(
+  role: DisplayMessage["role"],
+  content: string,
+  toolName?: string,
+): DisplayMessage {
+  return { id: nextMessageId++, role, content, toolName };
+}
 
 export interface DisplayMessage {
+  id: number;
   role: "user" | "assistant" | "tool";
   content: string;
   toolName?: string;
 }
 
-type Overlay = "none" | "model" | "settings" | "apiKey";
+type Overlay = "none" | "model" | "settings" | "apiKey" | "commandApproval";
 
 interface AppProps {
   session: AgentSession;
@@ -37,11 +51,13 @@ function modelForProvider(provider: ProviderId, settings: Settings): Model {
 export function App({ session, workdir, onQuit }: AppProps) {
   const { exit } = useApp();
   const [displayMessages, setDisplayMessages] = useState<DisplayMessage[]>(() =>
-    session.getMessages().map((m) => ({
-      role: m.role === "tool" ? "tool" : m.role === "user" ? "user" : "assistant",
-      content: m.content,
-      toolName: m.name,
-    })),
+    session.getMessages().map((m) =>
+      toDisplayMessage(
+        m.role === "tool" ? "tool" : m.role === "user" ? "user" : "assistant",
+        m.content,
+        m.name,
+      ),
+    ),
   );
   const [streamingText, setStreamingText] = useState("");
   const [overlay, setOverlay] = useState<Overlay>("none");
@@ -51,10 +67,14 @@ export function App({ session, workdir, onQuit }: AppProps) {
   const [settings, setSettings] = useState(session.getSettings());
   const [model, setModel] = useState(session.getModel());
   const [running, setRunning] = useState(false);
+  const [autoFollow, setAutoFollow] = useState(true);
+  const [pendingCommand, setPendingCommand] = useState<PermissionRequest | null>(null);
   const streamingRef = useRef("");
+  const autoFollowRef = useRef(true);
   const startupChecked = useRef(false);
 
   const theme = getTheme();
+  const { stdout } = useStdout();
 
   const openApiKeyPrompt = useCallback(
     (target: Model, returnTo: Overlay = "none") => {
@@ -94,17 +114,27 @@ export function App({ session, workdir, onQuit }: AppProps) {
   }, [session, settings, openApiKeyPrompt]);
 
   useEffect(() => {
+    if (autoFollow && streamingText) {
+      scrollViewportToBottom(stdout);
+    }
+  }, [streamingText, autoFollow, stdout]);
+
+  useEffect(() => {
     const handler = (event: SessionEvent) => {
       switch (event.type) {
         case "user_message":
-          setDisplayMessages((prev) => [...prev, { role: "user", content: event.content }]);
+          autoFollowRef.current = true;
+          setAutoFollow(true);
+          setDisplayMessages((prev) => [...prev, toDisplayMessage("user", event.content)]);
           setRunning(true);
           streamingRef.current = "";
           setStreamingText("");
+          scrollViewportToBottom(stdout);
           break;
         case "message_start":
           streamingRef.current = "";
           setStreamingText("");
+          if (autoFollowRef.current) scrollViewportToBottom(stdout);
           break;
         case "text_delta":
           streamingRef.current += event.delta;
@@ -113,7 +143,7 @@ export function App({ session, workdir, onQuit }: AppProps) {
         case "tool_call":
           const partial = streamingRef.current;
           if (partial) {
-            setDisplayMessages((prev) => [...prev, { role: "assistant", content: partial }]);
+            setDisplayMessages((prev) => [...prev, toDisplayMessage("assistant", partial)]);
             streamingRef.current = "";
             setStreamingText("");
           }
@@ -121,13 +151,13 @@ export function App({ session, workdir, onQuit }: AppProps) {
         case "tool_result":
           setDisplayMessages((prev) => [
             ...prev,
-            { role: "tool", content: event.result, toolName: event.name },
+            toDisplayMessage("tool", event.result, event.name),
           ]);
           break;
         case "turn_end":
           const final = streamingRef.current;
           if (final) {
-            setDisplayMessages((prev) => [...prev, { role: "assistant", content: final }]);
+            setDisplayMessages((prev) => [...prev, toDisplayMessage("assistant", final)]);
           }
           streamingRef.current = "";
           setStreamingText("");
@@ -136,14 +166,19 @@ export function App({ session, workdir, onQuit }: AppProps) {
         case "error":
           setDisplayMessages((prev) => [
             ...prev,
-            { role: "assistant", content: `Error: ${event.message}` },
+            toDisplayMessage("assistant", `Error: ${event.message}`),
           ]);
           streamingRef.current = "";
           setStreamingText("");
           setRunning(false);
+          setPendingCommand(null);
           if (/Missing .*API_KEY/i.test(event.message)) {
             openApiKeyPrompt(model, "none");
           }
+          break;
+        case "permission_request":
+          setPendingCommand(event.request);
+          setOverlay("commandApproval");
           break;
         case "model_changed":
           setModel(event.model);
@@ -154,13 +189,26 @@ export function App({ session, workdir, onQuit }: AppProps) {
     return () => {
       session.off("event", handler);
     };
-  }, [session, model, openApiKeyPrompt]);
+  }, [session, model, openApiKeyPrompt, stdout]);
+
+  autoFollowRef.current = autoFollow;
 
   useInput(
-    (_, key) => {
+    (input, key) => {
       if (overlay !== "none") return;
       if (key.escape && running) {
         session.abort();
+        return;
+      }
+      if (key.pageUp || (key.upArrow && key.shift)) {
+        autoFollowRef.current = false;
+        setAutoFollow(false);
+        return;
+      }
+      if (input === "g" && key.ctrl) {
+        autoFollowRef.current = true;
+        setAutoFollow(true);
+        scrollViewportToBottom(stdout);
       }
     },
     { isActive: overlay === "none" },
@@ -177,6 +225,7 @@ export function App({ session, workdir, onQuit }: AppProps) {
         session.newSession();
         setDisplayMessages([]);
         setStreamingText("");
+        setAutoFollow(true);
         return;
       }
       if (value === "/settings") {
@@ -204,8 +253,8 @@ export function App({ session, workdir, onQuit }: AppProps) {
   const hasChat = displayMessages.length > 0 || streamingText.length > 0;
 
   return (
-    <Box flexDirection="column" height="100%">
-      <Box paddingX={2} marginBottom={1}>
+    <Box flexDirection="column">
+      <Box paddingX={2} marginBottom={1} flexShrink={0}>
         <StartupBanner theme={theme} compact={hasChat} />
       </Box>
 
@@ -215,18 +264,25 @@ export function App({ session, workdir, onQuit }: AppProps) {
         model={model}
         streamingText={streamingText}
         running={running}
+        autoFollow={autoFollow}
       />
 
       <Footer workdir={workdir} model={model} theme={theme} />
 
       {overlay === "none" && (
-        <Editor
-          theme={theme}
-          model={model}
-          disabled={running}
-          running={running}
-          onSubmit={handleSubmit}
-        />
+        <Box flexShrink={0}>
+          <Editor
+            theme={theme}
+            model={model}
+            disabled={running}
+            running={running}
+            onSubmit={handleSubmit}
+            onPauseFollow={() => {
+              autoFollowRef.current = false;
+              setAutoFollow(false);
+            }}
+          />
+        </Box>
       )}
 
       {overlay === "model" && (
@@ -277,6 +333,23 @@ export function App({ session, workdir, onQuit }: AppProps) {
             openApiKeyPrompt(modelForProvider(provider, settings), "settings");
           }}
           onClose={() => setOverlay("none")}
+        />
+      )}
+
+      {overlay === "commandApproval" && pendingCommand && (
+        <CommandApprovalPrompt
+          theme={theme}
+          request={pendingCommand}
+          onApprove={() => {
+            session.respondToPermission(true);
+            setPendingCommand(null);
+            setOverlay("none");
+          }}
+          onDeny={() => {
+            session.respondToPermission(false);
+            setPendingCommand(null);
+            setOverlay("none");
+          }}
         />
       )}
     </Box>

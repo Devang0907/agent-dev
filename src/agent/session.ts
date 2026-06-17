@@ -4,10 +4,14 @@ import type { Settings } from "../config/settings.js";
 import { findModel } from "../config/models.js";
 import { setDefaultModel, saveSettings } from "../config/settings.js";
 import { getAvailableModels, getDefaultModelForProvider } from "../providers/registry.js";
-import { runAgentLoop, type AgentEvent } from "./loop.js";
+import { runAgentLoop, type AgentEvent, type PermissionRequest } from "./loop.js";
 import { SessionManager } from "../session/manager.js";
 
-export type SessionEvent = AgentEvent | { type: "user_message"; content: string } | { type: "model_changed"; model: Model };
+export type SessionEvent =
+  | AgentEvent
+  | { type: "user_message"; content: string }
+  | { type: "model_changed"; model: Model }
+  | { type: "permission_request"; request: PermissionRequest };
 
 export class AgentSession extends EventEmitter {
   private messages: ChatMessage[] = [];
@@ -17,6 +21,7 @@ export class AgentSession extends EventEmitter {
   private sessionManager: SessionManager;
   private abortController?: AbortController;
   private running = false;
+  private pendingPermission?: (approved: boolean) => void;
 
   constructor(
     settings: Settings,
@@ -69,6 +74,26 @@ export class AgentSession extends EventEmitter {
 
   abort(): void {
     this.abortController?.abort();
+    this.resolvePermission(false);
+  }
+
+  respondToPermission(approved: boolean): void {
+    this.resolvePermission(approved);
+  }
+
+  private resolvePermission(approved: boolean): void {
+    const resolve = this.pendingPermission;
+    if (resolve) {
+      this.pendingPermission = undefined;
+      resolve(approved);
+    }
+  }
+
+  private requestCommandPermission(request: PermissionRequest): Promise<boolean> {
+    return new Promise((resolve) => {
+      this.pendingPermission = resolve;
+      this.emit("event", { type: "permission_request", request } satisfies SessionEvent);
+    });
   }
 
   async prompt(content: string): Promise<void> {
@@ -90,6 +115,7 @@ export class AgentSession extends EventEmitter {
         workdir: this.workdir,
         signal: this.abortController.signal,
         onEvent: (event) => this.emit("event", event),
+        onPermissionRequest: (request) => this.requestCommandPermission(request),
       });
 
       for (const msg of newMessages) {

@@ -1,6 +1,6 @@
 # agent-dev
 
-A minimal pi-like terminal coding agent with an Ink UI. Chat with an AI that can read, write, edit files, and run bash commands.
+A minimal pi-like terminal coding agent with an Ink UI. Chat with an AI that can read, write, edit files, search the web, and run shell commands (with your approval).
 
 ## Quick start
 
@@ -51,7 +51,17 @@ Config and sessions are stored in `~/.agent-dev/`.
 
 ## Tools
 
-The agent has four built-in tools: `read`, `write`, `edit`, `bash`. File operations are restricted to the current working directory.
+The agent has five built-in tools:
+
+| Tool | Description |
+|------|-------------|
+| `read` | Read a file in the project directory |
+| `write` | Create or overwrite a file |
+| `edit` | Replace text in a file |
+| `web_search` | Search the internet (DuckDuckGo, no extra API key) |
+| `bash` | Run a shell command — **requires your approval** before execution |
+
+File operations are restricted to the current working directory. When the agent proposes a shell command, the UI prompts you to approve (`y`) or deny (`n` / Esc).
 
 ## License
 

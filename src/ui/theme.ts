@@ -34,4 +34,5 @@ export const TOOL_ICONS: Record<string, string> = {
   read: "→",
   write: "⚙",
   edit: "%",
+  web_search: "⌕",
 };

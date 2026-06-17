@@ -1,6 +1,21 @@
 import chalk from "chalk";
+import { createInterface } from "node:readline/promises";
+import { stdin as input, stdout as output } from "node:process";
 import type { AgentSession } from "../agent/session.js";
-import { runAgentLoop } from "../agent/loop.js";
+import { runAgentLoop, type PermissionRequest } from "../agent/loop.js";
+
+async function promptCommandApproval(request: PermissionRequest): Promise<boolean> {
+  console.log(chalk.yellow(`\nCommand approval required:`));
+  console.log(chalk.white(`  ${request.command}`));
+
+  const rl = createInterface({ input, output });
+  try {
+    const answer = await rl.question(chalk.gray("Run? [y/N] "));
+    return /^y(es)?$/i.test(answer.trim());
+  } finally {
+    rl.close();
+  }
+}
 
 export async function runPrintMode(session: AgentSession, prompt: string): Promise<void> {
   const model = session.getModel();
@@ -16,6 +31,7 @@ export async function runPrintMode(session: AgentSession, prompt: string): Promi
     messages: [...prior, userMsg],
     settings: session.getSettings(),
     workdir: process.cwd(),
+    onPermissionRequest: promptCommandApproval,
     onEvent: (event) => {
       if (event.type === "text_delta") {
         process.stdout.write(event.delta);

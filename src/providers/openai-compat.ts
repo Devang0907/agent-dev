@@ -28,6 +28,64 @@ export function normalizeToolCalls(toolCalls: ToolCall[]): ToolCall[] {
   }));
 }
 
+/** Recover tool calls Groq/Llama sometimes emit as malformed text instead of structured tool_calls. */
+export function parseMalformedToolCalls(text: string): ToolCall[] {
+  const results: ToolCall[] = [];
+  if (!text) return results;
+
+  let i = 0;
+  const patterns = [
+    // Groq: <function=web_search{"query":"..."}</function>
+    // Groq: <function=web_search {"query": "..."} </function>
+    /<function=([a-zA-Z0-9_]+)\s*(\{[\s\S]*?\})\s*<\/function>/gi,
+    // Groq: <function=web_search>{"query":"..."}</function>
+    /<function=([a-zA-Z0-9_]+)\s*>\s*(\{[\s\S]*?\})\s*<\/function>/gi,
+    /<tool_call>\s*([a-zA-Z0-9_]+)\s*(\{[\s\S]*?\})\s*<\/tool_call>/gi,
+  ];
+
+  for (const re of patterns) {
+    re.lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = re.exec(text)) !== null) {
+      const name = match[1]!.trim();
+      const args = match[2]!.trim();
+      if (name && args.startsWith("{")) {
+        results.push({
+          id: `recovered_${Date.now()}_${i++}`,
+          name,
+          arguments: args,
+        });
+      }
+    }
+    if (results.length > 0) break;
+  }
+
+  if (results.length === 0) {
+    const looseRe = /<function=([a-zA-Z0-9_]+)([\s\S]*?)<\/function>/gi;
+    let match: RegExpExecArray | null;
+    while ((match = looseRe.exec(text)) !== null) {
+      const name = match[1]!.trim();
+      const jsonMatch = match[2]!.match(/\{[\s\S]*\}/);
+      if (name && jsonMatch) {
+        results.push({
+          id: `recovered_${Date.now()}_${i++}`,
+          name,
+          arguments: jsonMatch[0].trim(),
+        });
+      }
+    }
+  }
+
+  return results;
+}
+
+export function extractFailedGeneration(errorMessage: string): string | null {
+  const marker = "Model output:";
+  const idx = errorMessage.indexOf(marker);
+  if (idx >= 0) return errorMessage.slice(idx + marker.length).trim();
+  return null;
+}
+
 export function toOpenAIMessages(ctx: ChatContext): OpenAI.Chat.ChatCompletionMessageParam[] {
   const msgs: OpenAI.Chat.ChatCompletionMessageParam[] = [];
   if (ctx.systemPrompt) {

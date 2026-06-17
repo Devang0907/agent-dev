@@ -1,16 +1,37 @@
-import { normalizeToolCalls } from "../providers/openai-compat.js";
+import {
+  normalizeToolCalls,
+  parseMalformedToolCalls,
+  extractFailedGeneration,
+} from "../providers/openai-compat.js";
 import { streamChat } from "../providers/registry.js";
-import type { ChatMessage, Model, StreamEvent, ToolCall } from "../providers/types.js";
+import type { ChatMessage, Model, ToolCall } from "../providers/types.js";
 import type { Settings } from "../config/settings.js";
-import { getToolDefinitions, executeTool } from "./tools/index.js";
+import { getToolDefinitions, executeTool, PERMISSION_REQUIRED_TOOLS } from "./tools/index.js";
+
+export interface PermissionRequest {
+  toolCallId: string;
+  name: string;
+  args: Record<string, unknown>;
+  command: string;
+}
 
 const MAX_TOOL_ROUNDS = 6;
 const MAX_SAME_TOOL_CALLS = 2;
 
-const DEFAULT_SYSTEM_PROMPT = `You are a helpful coding assistant with access to tools: read, write, edit, and bash.
+const DEFAULT_SYSTEM_PROMPT = `You are a helpful coding assistant with access to tools: read, write, edit, bash, and web_search.
 When the user asks you to create or modify files, call write or edit once with the full file content, then reply briefly to confirm.
+Use web_search when you need current information, documentation, or facts from the internet.
+Shell commands via bash require user approval before they run — propose the exact command you need.
 Do NOT call the same tool repeatedly with the same arguments. One successful write is enough.
+When calling tools, use the function-calling API with valid JSON arguments only (e.g. web_search: {"query": "search terms"}).
 Working directory: ${process.cwd()}`;
+
+function systemPromptForModel(model: Model, base = DEFAULT_SYSTEM_PROMPT): string {
+  if (model.provider === "groq") {
+    return `${base}\nFor Groq: never output <function=...> text — use structured tool calls with JSON arguments.`;
+  }
+  return base;
+}
 
 export type AgentEvent =
   | { type: "message_start"; role: "assistant" }
@@ -28,6 +49,7 @@ export interface AgentLoopOptions {
   systemPrompt?: string;
   signal?: AbortSignal;
   onEvent: (event: AgentEvent) => void;
+  onPermissionRequest?: (request: PermissionRequest) => Promise<boolean>;
 }
 
 function isToolUseFailedError(message: string): boolean {
@@ -52,6 +74,89 @@ function dedupeToolCalls(toolCalls: ToolCall[]): ToolCall[] {
     seen.add(key);
     return true;
   });
+}
+
+function resolveToolCalls(content: string, toolCalls: ToolCall[], error?: string): ToolCall[] {
+  const normalized = dedupeToolCalls(normalizeToolCalls(toolCalls.filter((tc) => tc.name)));
+  if (normalized.length > 0) return normalized;
+
+  const fromContent = dedupeToolCalls(normalizeToolCalls(parseMalformedToolCalls(content)));
+  if (fromContent.length > 0) return fromContent;
+
+  if (error) {
+    const failed = extractFailedGeneration(error);
+    if (failed) {
+      return dedupeToolCalls(normalizeToolCalls(parseMalformedToolCalls(failed)));
+    }
+  }
+
+  return [];
+}
+
+async function runToolBatch(
+  uniqueCalls: ToolCall[],
+  context: ChatMessage[],
+  workdir: string,
+  callCounts: Map<string, number>,
+  onEvent: (event: AgentEvent) => void,
+  onPermissionRequest?: (request: PermissionRequest) => Promise<boolean>,
+): Promise<boolean> {
+  let stopAfterBatch = false;
+
+  for (const tc of uniqueCalls) {
+    onEvent({ type: "tool_call", toolCall: tc });
+    let args: Record<string, unknown> = {};
+    try {
+      args = JSON.parse(tc.arguments || "{}");
+    } catch {
+      args = {};
+    }
+
+    const sig = toolSignature(tc.name, args);
+    const prev = callCounts.get(sig) ?? 0;
+    callCounts.set(sig, prev + 1);
+
+    if (prev >= MAX_SAME_TOOL_CALLS) {
+      const skip = "Skipped — already executed this action.";
+      onEvent({ type: "tool_result", toolCallId: tc.id, name: tc.name, result: skip });
+      context.push({ role: "tool", content: skip, toolCallId: tc.id, name: tc.name });
+      stopAfterBatch = true;
+      continue;
+    }
+
+    let result: string;
+    const needsPermission = PERMISSION_REQUIRED_TOOLS.has(tc.name);
+
+    if (needsPermission && onPermissionRequest) {
+      const approved = await onPermissionRequest({
+        toolCallId: tc.id,
+        name: tc.name,
+        args,
+        command: String(args.command ?? ""),
+      });
+      result = approved
+        ? await executeTool(tc.name, args, workdir)
+        : "Command execution denied by user.";
+    } else if (needsPermission) {
+      result = "Command execution denied — permission handler not available.";
+    } else {
+      result = await executeTool(tc.name, args, workdir);
+    }
+
+    onEvent({ type: "tool_result", toolCallId: tc.id, name: tc.name, result });
+    context.push({
+      role: "tool",
+      content: result,
+      toolCallId: tc.id,
+      name: tc.name,
+    });
+
+    if (!result.startsWith("Error:") && (tc.name === "write" || tc.name === "edit")) {
+      stopAfterBatch = true;
+    }
+  }
+
+  return stopAfterBatch;
 }
 
 async function collectStream(
@@ -91,7 +196,7 @@ async function collectStream(
       if (event.name) tc.name = event.name;
       if (event.argumentsDelta) tc.arguments += event.argumentsDelta;
     } else if (event.type === "error") {
-      return { content, toolCalls: [], error: event.message };
+      return { content, toolCalls: Array.from(toolCallMap.values()), error: event.message };
     }
   }
 
@@ -121,10 +226,12 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<ChatMessa
     systemPrompt = DEFAULT_SYSTEM_PROMPT,
     signal,
     onEvent,
+    onPermissionRequest,
   } = options;
 
   const context = [...messages];
   const callCounts = new Map<string, number>();
+  const effectivePrompt = systemPromptForModel(model, systemPrompt);
   let toolRound = 0;
 
   while (true) {
@@ -142,12 +249,14 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<ChatMessa
       model,
       context,
       settings,
-      systemPrompt,
+      effectivePrompt,
       signal,
       onEvent,
     );
 
-    if (error) {
+    const uniqueCalls = resolveToolCalls(content, toolCalls, error);
+
+    if (error && uniqueCalls.length === 0) {
       if (isToolUseFailedError(error) && hadSuccessfulToolResults(context)) {
         finishGracefully(context, content, onEvent);
         break;
@@ -156,56 +265,30 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<ChatMessa
       break;
     }
 
-    const uniqueCalls = dedupeToolCalls(toolCalls);
-
     const assistantMsg: ChatMessage = {
       role: "assistant",
-      content,
+      content: error ? "" : content,
       toolCalls: uniqueCalls.length > 0 ? uniqueCalls : undefined,
     };
     context.push(assistantMsg);
 
     if (uniqueCalls.length === 0) {
-      onEvent({ type: "turn_end" });
+      if (error) {
+        onEvent({ type: "error", message: error });
+      } else {
+        onEvent({ type: "turn_end" });
+      }
       break;
     }
 
-    let stopAfterBatch = false;
-
-    for (const tc of uniqueCalls) {
-      onEvent({ type: "tool_call", toolCall: tc });
-      let args: Record<string, unknown> = {};
-      try {
-        args = JSON.parse(tc.arguments || "{}");
-      } catch {
-        args = {};
-      }
-
-      const sig = toolSignature(tc.name, args);
-      const prev = callCounts.get(sig) ?? 0;
-      callCounts.set(sig, prev + 1);
-
-      if (prev >= MAX_SAME_TOOL_CALLS) {
-        const skip = "Skipped — already executed this action.";
-        onEvent({ type: "tool_result", toolCallId: tc.id, name: tc.name, result: skip });
-        context.push({ role: "tool", content: skip, toolCallId: tc.id, name: tc.name });
-        stopAfterBatch = true;
-        continue;
-      }
-
-      const result = await executeTool(tc.name, args, workdir);
-      onEvent({ type: "tool_result", toolCallId: tc.id, name: tc.name, result });
-      context.push({
-        role: "tool",
-        content: result,
-        toolCallId: tc.id,
-        name: tc.name,
-      });
-
-      if (!result.startsWith("Error:") && (tc.name === "write" || tc.name === "edit")) {
-        stopAfterBatch = true;
-      }
-    }
+    const stopAfterBatch = await runToolBatch(
+      uniqueCalls,
+      context,
+      workdir,
+      callCounts,
+      onEvent,
+      onPermissionRequest,
+    );
 
     if (stopAfterBatch) {
       finishGracefully(context, content, onEvent);
