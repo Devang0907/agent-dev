@@ -12,6 +12,7 @@ interface ModelSelectorProps {
   theme: ThemeColors;
   settings: Settings;
   filter?: string;
+  viewportHeight: number;
   onSelect: (model: Model) => void;
   onClose: () => void;
 }
@@ -23,7 +24,14 @@ function fuzzyMatch(text: string, query: string): boolean {
   return lower.includes(q);
 }
 
-export function ModelSelector({ theme, settings, filter, onSelect, onClose }: ModelSelectorProps) {
+export function ModelSelector({
+  theme,
+  settings,
+  filter,
+  viewportHeight,
+  onSelect,
+  onClose,
+}: ModelSelectorProps) {
   const filtered = ALL_MODELS.filter((m) => {
     const label = `${PROVIDER_LABELS[m.provider]} ${m.name} ${modelRef(m)}`;
     return fuzzyMatch(label, filter ?? "");
@@ -50,15 +58,23 @@ export function ModelSelector({ theme, settings, filter, onSelect, onClose }: Mo
   const providers: ProviderId[] = ["openai", "groq", "gemini", "free"];
   let lastProvider: ProviderId | undefined;
 
+  const listHeight = Math.max(4, viewportHeight - 6);
+
   return (
-    <Box paddingX={2} marginTop={1}>
+    <Box
+      flexDirection="column"
+      height={viewportHeight}
+      flexShrink={0}
+      overflow="hidden"
+      paddingX={2}
+    >
       <LeftBorder theme={theme} borderColor={theme.borderActive}>
         <Text color={theme.text} bold>/model</Text>
         <Text color={theme.textMuted}> ↑↓ navigate · Enter select · Esc close</Text>
         <Text color={theme.textMuted}> Models without a key will prompt for an API key</Text>
         {filter && <Text color={theme.textMuted}> filter: {filter}</Text>}
 
-        <Box flexDirection="column" marginTop={1}>
+        <Box flexDirection="column" marginTop={1} height={listHeight} overflow="hidden">
           {filtered.length === 0 && <Text color={theme.textMuted}>No models match</Text>}
           {filtered.map((m, i) => {
             const selected = i === safeIndex;

@@ -12,14 +12,45 @@ const PROVIDERS: ProviderId[] = ["openai", "groq", "gemini", "free"];
 interface SettingsViewProps {
   theme: ThemeColors;
   settings: Settings;
+  viewportHeight: number;
+  contentWidth: number;
   onUpdate: (settings: Settings) => void;
   onSetApiKey: (provider: ProviderId) => void;
   onClose: () => void;
 }
 
-export function SettingsView({ theme, settings, onUpdate, onSetApiKey, onClose }: SettingsViewProps) {
+function providerStatus(
+  provider: ProviderId,
+  settings: Settings,
+): string {
+  const fromEnv = PROVIDER_ENV_VARS[provider].some((v) => !!process.env[v]);
+  const fromSettings = !!settings.apiKeys?.[provider];
+  const parts: string[] = [];
+  if (fromEnv) parts.push("env");
+  if (fromSettings) parts.push("saved");
+  if (parts.length === 0) parts.push("Enter to set");
+  return parts.join(" · ");
+}
+
+function truncate(text: string, max: number): string {
+  if (max <= 1 || text.length <= max) return text;
+  return text.slice(0, max - 1) + "…";
+}
+
+export function SettingsView({
+  theme,
+  settings,
+  viewportHeight,
+  contentWidth,
+  onUpdate,
+  onSetApiKey,
+  onClose,
+}: SettingsViewProps) {
   const items = ["thinkingLevel", ...PROVIDERS];
   const [index, setIndex] = useState(0);
+
+  const providerColWidth = 16;
+  const statusWidth = Math.max(18, contentWidth - providerColWidth);
 
   useInput(
     (_, key) => {
@@ -41,7 +72,13 @@ export function SettingsView({ theme, settings, onUpdate, onSetApiKey, onClose }
   );
 
   return (
-    <Box paddingX={2} marginTop={1} marginBottom={1}>
+    <Box
+      flexDirection="column"
+      height={viewportHeight}
+      flexShrink={0}
+      overflow="hidden"
+      paddingX={2}
+    >
       <LeftBorder theme={theme} borderColor={theme.borderActive}>
         <Text color={theme.text} bold>/settings</Text>
         <Text color={theme.textMuted}> ↑↓ navigate · Enter select · Esc close</Text>
@@ -54,20 +91,21 @@ export function SettingsView({ theme, settings, onUpdate, onSetApiKey, onClose }
           </Text>
 
           <Box marginTop={1}>
-            <Text color={theme.textMuted}>API keys — Enter to set / update</Text>
+            <Text color={theme.textMuted}>API keys</Text>
           </Box>
           {PROVIDERS.map((p, i) => {
             const idx = i + 1;
-            const vars = PROVIDER_ENV_VARS[p];
-            const fromEnv = vars.some((v) => !!process.env[v]);
-            const fromSettings = !!settings.apiKeys?.[p];
             const ok = hasProviderAuth(p, settings);
+            const selected = index === idx;
+            const label = truncate(
+              `${selected ? "› " : "  "}${ok ? "✓" : "○"} ${p}`,
+              providerColWidth,
+            ).padEnd(providerColWidth);
+            const status = truncate(providerStatus(p, settings), statusWidth).padEnd(statusWidth);
             return (
-              <Text key={p} color={index === idx ? theme.primary : theme.text}>
-                {index === idx ? "› " : "  "}
-                {ok ? "✓" : "○"} {p}
-                {fromEnv && <Text color={theme.textMuted}> env</Text>}
-                {fromSettings && <Text color={theme.textMuted}> saved</Text>}
+              <Text key={p} color={selected ? theme.primary : theme.text}>
+                {label}
+                <Text color={theme.textMuted}>{status}</Text>
               </Text>
             );
           })}

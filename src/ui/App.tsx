@@ -395,6 +395,73 @@ export function App({ session, workdir, onQuit }: AppProps) {
           onSelect={loadSession}
           onClose={() => setOverlay("none")}
         />
+      ) : overlay === "settings" ? (
+        <SettingsView
+          theme={theme}
+          settings={settings}
+          viewportHeight={viewportHeight}
+          contentWidth={contentWidth}
+          onUpdate={(s) => {
+            session.updateSettings(s);
+            setSettings(s);
+          }}
+          onSetApiKey={(provider) => {
+            openApiKeyPrompt(modelForProvider(provider, settings), "settings");
+          }}
+          onClose={() => setOverlay("none")}
+        />
+      ) : overlay === "model" ? (
+        <ModelSelector
+          theme={theme}
+          settings={settings}
+          filter={modelFilter}
+          viewportHeight={viewportHeight}
+          onSelect={(m) => {
+            if (!hasProviderAuth(m.provider, settings)) {
+              openApiKeyPrompt(m, "model");
+              return;
+            }
+            session.setModel(m);
+            setModel(m);
+            setOverlay("none");
+            setModelFilter(undefined);
+          }}
+          onClose={() => {
+            setOverlay("none");
+            setModelFilter(undefined);
+          }}
+        />
+      ) : overlay === "apiKey" && pendingModel ? (
+        <Box height={viewportHeight} flexShrink={0} overflow="hidden" paddingX={2}>
+          <ApiKeyPrompt
+            theme={theme}
+            provider={pendingModel.provider}
+            model={pendingModel}
+            onSubmit={saveApiKey}
+            onCancel={() => {
+              setPendingModel(null);
+              setOverlay(apiKeyReturnOverlay);
+              setApiKeyReturnOverlay("none");
+            }}
+          />
+        </Box>
+      ) : overlay === "commandApproval" && pendingCommand ? (
+        <Box height={viewportHeight} flexShrink={0} overflow="hidden" paddingX={2}>
+          <CommandApprovalPrompt
+            theme={theme}
+            request={pendingCommand}
+            onApprove={() => {
+              session.respondToPermission(true);
+              setPendingCommand(null);
+              setOverlay("none");
+            }}
+            onDeny={() => {
+              session.respondToPermission(false);
+              setPendingCommand(null);
+              setOverlay("none");
+            }}
+          />
+        </Box>
       ) : hasChat ? (
         <ChatView
           messages={displayMessages}
@@ -426,74 +493,6 @@ export function App({ session, workdir, onQuit }: AppProps) {
             onSubmit={handleSubmit}
           />
         </Box>
-      )}
-
-      {overlay === "model" && (
-        <ModelSelector
-          theme={theme}
-          settings={settings}
-          filter={modelFilter}
-          onSelect={(m) => {
-            if (!hasProviderAuth(m.provider, settings)) {
-              openApiKeyPrompt(m, "model");
-              return;
-            }
-            session.setModel(m);
-            setModel(m);
-            setOverlay("none");
-            setModelFilter(undefined);
-          }}
-          onClose={() => {
-            setOverlay("none");
-            setModelFilter(undefined);
-          }}
-        />
-      )}
-
-      {overlay === "apiKey" && pendingModel && (
-        <ApiKeyPrompt
-          theme={theme}
-          provider={pendingModel.provider}
-          model={pendingModel}
-          onSubmit={saveApiKey}
-          onCancel={() => {
-            setPendingModel(null);
-            setOverlay(apiKeyReturnOverlay);
-            setApiKeyReturnOverlay("none");
-          }}
-        />
-      )}
-
-      {overlay === "settings" && (
-        <SettingsView
-          theme={theme}
-          settings={settings}
-          onUpdate={(s) => {
-            session.updateSettings(s);
-            setSettings(s);
-          }}
-          onSetApiKey={(provider) => {
-            openApiKeyPrompt(modelForProvider(provider, settings), "settings");
-          }}
-          onClose={() => setOverlay("none")}
-        />
-      )}
-
-      {overlay === "commandApproval" && pendingCommand && (
-        <CommandApprovalPrompt
-          theme={theme}
-          request={pendingCommand}
-          onApprove={() => {
-            session.respondToPermission(true);
-            setPendingCommand(null);
-            setOverlay("none");
-          }}
-          onDeny={() => {
-            session.respondToPermission(false);
-            setPendingCommand(null);
-            setOverlay("none");
-          }}
-        />
       )}
     </Box>
   );
