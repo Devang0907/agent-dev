@@ -18,6 +18,8 @@ interface EditorProps {
   model: Model;
   disabled?: boolean;
   running?: boolean;
+  maxSuggestions?: number;
+  onSuggestionCountChange?: (count: number) => void;
   onSubmit: (value: string) => void;
 }
 
@@ -26,7 +28,15 @@ function BlinkingCursor({ theme, visible }: { theme: ThemeColors; visible: boole
   return <Text color={theme.primary}>▌</Text>;
 }
 
-export function Editor({ theme, model, disabled, running, onSubmit }: EditorProps) {
+export function Editor({
+  theme,
+  model,
+  disabled,
+  running,
+  maxSuggestions = SLASH_COMMANDS.length,
+  onSuggestionCountChange,
+  onSubmit,
+}: EditorProps) {
   const [value, setValue] = useState("");
   const [suggestions, setSuggestions] = useState<typeof SLASH_COMMANDS[number][]>([]);
   const [spinIdx, setSpinIdx] = useState(0);
@@ -43,6 +53,13 @@ export function Editor({ theme, model, disabled, running, onSubmit }: EditorProp
     const id = setInterval(() => setCursorOn((v) => !v), 530);
     return () => clearInterval(id);
   }, [disabled]);
+
+  const visibleSuggestions = suggestions.slice(0, maxSuggestions);
+
+  useEffect(() => {
+    onSuggestionCountChange?.(visibleSuggestions.length);
+    return () => onSuggestionCountChange?.(0);
+  }, [visibleSuggestions.length, onSuggestionCountChange]);
 
   const updateSuggestions = (text: string) => {
     if (text.startsWith("/")) {
@@ -99,7 +116,7 @@ export function Editor({ theme, model, disabled, running, onSubmit }: EditorProp
 
   return (
     <Box flexDirection="column" marginX={2}>
-      {suggestions.length > 0 && (
+      {visibleSuggestions.length > 0 && (
         <Box
           flexDirection="column"
           borderStyle="round"
@@ -107,7 +124,7 @@ export function Editor({ theme, model, disabled, running, onSubmit }: EditorProp
           paddingX={1}
           marginBottom={1}
         >
-          {suggestions.map((s) => (
+          {visibleSuggestions.map((s) => (
             <Text key={s.cmd}>
               <Text color={theme.primary}>{s.cmd}</Text>
               <Text color={theme.textMuted}> — {s.desc}</Text>

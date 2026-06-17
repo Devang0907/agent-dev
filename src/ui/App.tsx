@@ -25,7 +25,10 @@ import {
   chatViewportHeight,
   effectiveScrollTop,
   isFollowing,
+  maxSlashSuggestions,
+  MIN_CHAT_ROWS,
   safeTerminalRows,
+  slashSuggestionRows,
 } from "./scroll.js";
 import { useMouseScroll } from "./useMouseScroll.js";
 import { WHEEL_SCROLL_LINES } from "./mouse.js";
@@ -79,7 +82,7 @@ export function App({ session, workdir, onQuit }: AppProps) {
   const { exit } = useApp();
   const terminal = useTerminalSize();
   const terminalRows = safeTerminalRows(terminal.rows);
-  const viewportHeight = chatViewportHeight(terminal.rows);
+  const [suggestionCount, setSuggestionCount] = useState(0);
   const contentWidth = chatContentWidth(terminal.cols);
 
   const [displayMessages, setDisplayMessages] = useState<DisplayMessage[]>(() =>
@@ -102,6 +105,15 @@ export function App({ session, workdir, onQuit }: AppProps) {
   const startupChecked = useRef(false);
 
   const theme = getTheme();
+
+  const hasChat = displayMessages.length > 0 || streamingText.length > 0;
+  const minMainRows = hasChat ? MIN_CHAT_ROWS : suggestionCount > 0 ? 1 : 0;
+  const viewportHeight = chatViewportHeight(
+    terminal.rows,
+    slashSuggestionRows(suggestionCount),
+    minMainRows,
+  );
+  const maxSuggestions = maxSlashSuggestions(terminal.rows, minMainRows);
 
   const chatLines = useMemo(
     () =>
@@ -268,8 +280,6 @@ export function App({ session, workdir, onQuit }: AppProps) {
     };
   }, [session, model, openApiKeyPrompt, followLatest]);
 
-  const hasChat = displayMessages.length > 0 || streamingText.length > 0;
-
   useMouseScroll(
     (direction) => {
       if (overlay !== "none") return;
@@ -397,8 +407,8 @@ export function App({ session, workdir, onQuit }: AppProps) {
           contentWidth={contentWidth}
         />
       ) : (
-        <Box paddingX={2} marginBottom={1} flexShrink={0}>
-          <StartupBanner theme={theme} />
+        <Box height={viewportHeight} overflow="hidden" flexShrink={0} paddingX={2}>
+          <StartupBanner theme={theme} compact={suggestionCount > 0} />
         </Box>
       )}
 
@@ -411,6 +421,8 @@ export function App({ session, workdir, onQuit }: AppProps) {
             model={model}
             disabled={running}
             running={running}
+            maxSuggestions={maxSuggestions}
+            onSuggestionCountChange={setSuggestionCount}
             onSubmit={handleSubmit}
           />
         </Box>

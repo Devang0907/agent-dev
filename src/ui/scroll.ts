@@ -29,15 +29,43 @@ export function wrapText(text: string, width: number): string[] {
   return lines.length > 0 ? lines : [""];
 }
 
-const FOOTER_ROWS = 3;
-const EDITOR_ROWS = 7;
+export const FOOTER_ROWS = 3;
+/** Input panel, model line, hint, and margins. */
+export const EDITOR_ROWS = 10;
+const SUGGESTION_CHROME_ROWS = 3;
+export const MIN_CHAT_ROWS = 6;
 
 export function safeTerminalRows(rows: number | undefined): number {
   return rows && rows > 0 ? rows : 24;
 }
 
-export function chatViewportHeight(rows: number | undefined): number {
-  return Math.max(6, safeTerminalRows(rows) - FOOTER_ROWS - EDITOR_ROWS);
+export function slashSuggestionRows(count: number): number {
+  if (count === 0) return 0;
+  return SUGGESTION_CHROME_ROWS + count;
+}
+
+export function maxSlashSuggestions(
+  terminalRows: number,
+  minMainRows: number = MIN_CHAT_ROWS,
+): number {
+  const available =
+    safeTerminalRows(terminalRows) -
+    FOOTER_ROWS -
+    EDITOR_ROWS -
+    minMainRows -
+    SUGGESTION_CHROME_ROWS;
+  return Math.max(1, available);
+}
+
+export function chatViewportHeight(
+  rows: number | undefined,
+  extraEditorRows = 0,
+  minMainRows: number = MIN_CHAT_ROWS,
+): number {
+  return Math.max(
+    minMainRows,
+    safeTerminalRows(rows) - FOOTER_ROWS - EDITOR_ROWS - extraEditorRows,
+  );
 }
 
 /** null = follow the latest output (pinned to bottom). */

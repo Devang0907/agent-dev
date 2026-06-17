@@ -11,7 +11,7 @@ export function useMouseScroll(
   onWheel: (direction: MouseWheelDirection) => void,
   options: { isActive?: boolean } = {},
 ): void {
-  const { internal_eventEmitter, isRawModeSupported } = useStdin();
+  const { internal_eventEmitter, isRawModeSupported, setRawMode } = useStdin();
   const { stdout } = useStdout();
   const bufferRef = useRef("");
   const onWheelRef = useRef(onWheel);
@@ -20,13 +20,17 @@ export function useMouseScroll(
   useEffect(() => {
     if (options.isActive === false || !isRawModeSupported) return;
 
+    setRawMode(true);
     stdout.write(ENABLE_MOUSE);
 
     const handleInput = (chunk: string) => {
       const { wheels, rest } = consumeMouseInput(bufferRef.current, chunk);
       bufferRef.current = rest;
-      for (const wheel of wheels) {
-        onWheelRef.current(wheel);
+
+      if (wheels.length > 0) {
+        for (const wheel of wheels) {
+          onWheelRef.current(wheel);
+        }
       }
     };
 
@@ -35,6 +39,7 @@ export function useMouseScroll(
       internal_eventEmitter?.removeListener("input", handleInput);
       stdout.write(DISABLE_MOUSE);
       bufferRef.current = "";
+      setRawMode(false);
     };
-  }, [options.isActive, internal_eventEmitter, stdout, isRawModeSupported]);
+  }, [options.isActive, internal_eventEmitter, stdout, isRawModeSupported, setRawMode]);
 }

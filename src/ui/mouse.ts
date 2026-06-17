@@ -1,9 +1,9 @@
 export type MouseWheelDirection = "up" | "down";
 
-/** Enable SGR mouse mode (clicks + wheel) in supporting terminals. */
-export const ENABLE_MOUSE = "\x1b[?1000h\x1b[?1006h\x1b[?1007h";
+/** SGR mouse tracking for wheel events. Do not enable 1007 — it hijacks wheel as arrow keys. */
+export const ENABLE_MOUSE = "\x1b[?1000h\x1b[?1006h";
 
-export const DISABLE_MOUSE = "\x1b[?1007l\x1b[?1006l\x1b[?1000l";
+export const DISABLE_MOUSE = "\x1b[?1006l\x1b[?1000l";
 
 const SGR_MOUSE_WITH_ESC = /^\x1b\[<(\d+);(\d+);(\d+)([mM])/;
 const SGR_MOUSE_NO_ESC = /^\[<(\d+);(\d+);(\d+)([mM])/;
@@ -28,9 +28,26 @@ export function isPrintableTextInput(input: string): boolean {
 }
 
 function wheelFromButton(button: number): MouseWheelDirection | undefined {
-  if (button === 64) return "up";
-  if (button === 65) return "down";
+  // SGR extended (xterm, Windows Terminal, VS Code)
+  if (button === 64 || button === 36) return "up";
+  if (button === 65 || button === 37) return "down";
+  // Unencoded / legacy values
+  if (button === 4) return "up";
+  if (button === 5) return "down";
   return undefined;
+}
+
+function findMouseStart(data: string): number {
+  const candidates = [data.indexOf("\x1b[<"), data.indexOf("[<"), data.indexOf("\x1b[M")].filter(
+    (i) => i >= 0,
+  );
+  return candidates.length > 0 ? Math.min(...candidates) : -1;
+}
+
+function looksLikeIncompleteMouse(data: string): boolean {
+  if (data.startsWith("\x1b[<") || data.startsWith("[<")) return data.length <= 32;
+  if (data.startsWith("\x1b[M")) return data.length < 6;
+  return false;
 }
 
 function tryConsumeMouseSequence(data: string): { consumed: number; wheel?: MouseWheelDirection } {
@@ -78,18 +95,17 @@ export function consumeMouseInput(buffer: string, chunk: string): MouseConsumeRe
       continue;
     }
 
-    if (data.startsWith("\x1b[<") || data.startsWith("[<")) {
-      if (data.length > 32) {
-        data = data.slice(1);
-        continue;
-      }
+    const mouseStart = findMouseStart(data);
+    if (mouseStart > 0) {
+      data = data.slice(mouseStart);
+      continue;
+    }
+
+    if (looksLikeIncompleteMouse(data)) {
       break;
     }
 
-    if (data.startsWith("\x1b[M") && data.length < 6) {
-      break;
-    }
-
+    data = "";
     break;
   }
 
