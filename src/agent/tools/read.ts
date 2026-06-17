@@ -103,8 +103,8 @@ export const bashTool: ToolDefinition = {
   name: "bash",
   description:
     osPlatform() === "win32"
-      ? "Run a PowerShell command in the project directory (Windows). Chain with ; not &&. Use non-interactive flags for npx/npm."
-      : "Run a bash shell command in the project directory",
+      ? "Run a PowerShell command. Dev servers (npm run dev) start in background. Chain with ; on Windows PowerShell 5."
+      : "Run a bash command. Dev servers (npm run dev) start in background and return a URL.",
   parameters: {
     type: "object",
     properties: {

@@ -4,7 +4,6 @@ import type { DisplayMessage } from "./App.js";
 import type { ThemeColors } from "./theme.js";
 import { SPINNER_FRAMES, TOOL_ICONS } from "./theme.js";
 import { LeftBorder } from "./LeftBorder.js";
-import { Panel } from "./Panel.js";
 import { modelRef } from "../config/models.js";
 import type { Model } from "../providers/types.js";
 
@@ -17,22 +16,20 @@ interface ChatViewProps {
   autoFollow?: boolean;
 }
 
-function truncate(text: string, max: number): string {
-  return text.length > max ? text.slice(0, max) + "…" : text;
-}
-
 function StaticMessage({
   msg,
   theme,
   model,
+  showModelTag,
 }: {
   msg: DisplayMessage;
   theme: ThemeColors;
   model: Model;
+  showModelTag: boolean;
 }) {
   if (msg.role === "user") {
     return (
-      <Box flexDirection="column" marginBottom={1}>
+      <Box marginBottom={1}>
         <LeftBorder theme={theme} borderColor={theme.primary} marginBottom={0}>
           <Text color={theme.text}>{msg.content}</Text>
         </LeftBorder>
@@ -44,21 +41,21 @@ function StaticMessage({
     return (
       <Box flexDirection="column" marginBottom={1} paddingLeft={1}>
         <Text color={theme.text}>{msg.content || ""}</Text>
-        <Text color={theme.textMuted}>
-          <Text color={theme.primary}>▣ </Text>
-          {modelRef(model)}
-        </Text>
+        {showModelTag && (
+          <Text color={theme.textMuted}>
+            <Text color={theme.primary}>▣ </Text>
+            {modelRef(model)}
+          </Text>
+        )}
       </Box>
     );
   }
 
+  const icon = TOOL_ICONS[msg.toolName ?? ""] ?? "·";
   return (
-    <Box paddingLeft={1} marginBottom={1}>
-      <Text color={theme.text}>
-        <Text color={theme.textMuted}>{TOOL_ICONS[msg.toolName ?? ""] ?? "⚙"}</Text>
-        {" "}
-        <Text bold>{msg.toolName}</Text>
-        <Text color={theme.textMuted}> {truncate(msg.content, 500)}</Text>
+    <Box paddingLeft={1} marginBottom={0}>
+      <Text color={theme.textMuted}>
+        {icon} {msg.content}
       </Text>
     </Box>
   );
@@ -85,39 +82,39 @@ export function ChatView({
     return null;
   }
 
+  const lastAssistantId = [...messages].reverse().find((m) => m.role === "assistant")?.id;
   const showWorking = running && !streamingText && messages.length > 0;
 
   return (
-    <Box flexDirection="column" marginBottom={1}>
+    <Box flexDirection="column" marginX={2} marginBottom={1}>
       <Static items={messages}>
         {(msg) => (
-          <StaticMessage key={msg.id} msg={msg} theme={theme} model={model} />
+          <StaticMessage
+            key={msg.id}
+            msg={msg}
+            theme={theme}
+            model={model}
+            showModelTag={msg.role === "assistant" && msg.id === lastAssistantId && !running}
+          />
         )}
       </Static>
 
-      {(streamingText || showWorking) && (
-        <Panel theme={theme} borderColor={theme.border} marginBottom={1}>
-          {streamingText && (
-            <Box flexDirection="column" paddingLeft={1}>
-              <Text color={theme.text}>{streamingText}</Text>
-              <Text color={theme.textMuted}>
-                <Text color={theme.primary}>{SPINNER_FRAMES[spinIdx]} </Text>
-                responding…
-                {!autoFollow && (
-                  <Text color={theme.warning}> · paused (Ctrl+G to follow)</Text>
-                )}
-              </Text>
-            </Box>
-          )}
+      {streamingText && (
+        <Box flexDirection="column" paddingLeft={1} marginTop={1}>
+          <Text color={theme.text}>{streamingText}</Text>
+          <Text color={theme.textMuted}>
+            <Text color={theme.primary}>{SPINNER_FRAMES[spinIdx]} </Text>
+            {!autoFollow && <Text color={theme.warning}>follow paused · Ctrl+G </Text>}
+          </Text>
+        </Box>
+      )}
 
-          {showWorking && (
-            <Box paddingLeft={1}>
-              <Text color={theme.textMuted}>
-                <Text color={theme.primary}>{SPINNER_FRAMES[spinIdx]}</Text> working…
-              </Text>
-            </Box>
-          )}
-        </Panel>
+      {showWorking && (
+        <Box paddingLeft={1} marginTop={1}>
+          <Text color={theme.textMuted}>
+            <Text color={theme.primary}>{SPINNER_FRAMES[spinIdx]}</Text> working…
+          </Text>
+        </Box>
       )}
     </Box>
   );

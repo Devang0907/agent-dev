@@ -85,16 +85,14 @@ export function getPlatformContext(): string {
       "Examples: New-Item -ItemType Directory -Force todo-app; Set-Location todo-app",
       "For npx/npm scaffolding, always use non-interactive flags (--yes, -y, --defaults) and set CI=1.",
       "Do not use mkdir -p, rm -rf, or touch — use PowerShell equivalents or the write tool.",
-      "Never run dev servers (npm run dev, npm start, next dev) via bash — they run forever and will time out.",
-      "To verify a web app, use npm run build. Tell the user to run the dev server in their own terminal.",
+      "Dev servers (npm run dev, next dev) start in the background via bash and return a localhost URL.",
       "Do not run npm audit fix unless the user explicitly asks.",
     );
   } else {
     lines.push(
       "Use bash/sh syntax. Chain commands with && or ;.",
       "For npx/npm scaffolding, use non-interactive flags (--yes, -y) to avoid prompts.",
-      "Never run dev servers (npm run dev, npm start) via bash — they run forever.",
-      "To verify a web app, use npm run build. Tell the user to run the dev server separately.",
+      "Dev servers (npm run dev) start in the background via bash and return a localhost URL.",
     );
   }
 

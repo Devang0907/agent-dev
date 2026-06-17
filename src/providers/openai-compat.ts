@@ -37,8 +37,22 @@ function unescapeJsonString(value: string): string {
     .replace(/\\\\/g, "\\");
 }
 
+function stripToolArgWrapper(raw: string): string {
+  let body = raw.trim().replace(/^[\[\]=\s]+/, "");
+  if (body.startsWith("(") && body.endsWith(")")) {
+    body = body.slice(1, -1).trim();
+  }
+  return body;
+}
+
+function argsFromFunctionTail(tail: string): string | null {
+  const jsonIdx = tail.indexOf("{");
+  if (jsonIdx < 0) return null;
+  return parseToolArguments(tail.slice(jsonIdx));
+}
+
 function parseToolArguments(raw: string): string | null {
-  const body = raw.replace(/^[\[\]\s]*/, "").trim();
+  const body = stripToolArgWrapper(raw);
   if (!body.startsWith("{")) return null;
 
   try {
@@ -64,6 +78,12 @@ function parseToolArguments(raw: string): string | null {
     return JSON.stringify({ query: unescapeJsonString(queryMatch[1]!) });
   }
 
+  const truncatedQuery = body.match(/"query"\s*:\s*"([\s\S]+)$/);
+  if (truncatedQuery) {
+    const query = unescapeJsonString(truncatedQuery[1]!.replace(/\\+$/, ""));
+    return JSON.stringify({ query });
+  }
+
   const pathMatch = body.match(/"path"\s*:\s*"((?:\\.|[^"\\])*)"/);
   if (pathMatch) {
     return JSON.stringify({ path: unescapeJsonString(pathMatch[1]!) });
@@ -84,40 +104,28 @@ export function parseMalformedToolCalls(text: string): ToolCall[] {
   const results: ToolCall[] = [];
   if (!text) return results;
 
-  const patterns = [
-    /<function=([a-zA-Z0-9_]+)\s*(?:\[\])?\s*(\{[\s\S]*?\})\s*<\/function>/gi,
-    /<function=([a-zA-Z0-9_]+)\s*>\s*(\{[\s\S]*?\})\s*<\/function>/gi,
-    /<tool_call>\s*([a-zA-Z0-9_]+)\s*(\{[\s\S]*?\})\s*<\/tool_call>/gi,
-  ];
+  const tryAdd = (name: string, tail: string) => {
+    const args = argsFromFunctionTail(tail);
+    if (name && args) pushRecovered(results, name, args);
+  };
 
-  for (const re of patterns) {
-    re.lastIndex = 0;
-    let match: RegExpExecArray | null;
-    while ((match = re.exec(text)) !== null) {
-      const name = match[1]!.trim();
-      const args = parseToolArguments(match[2]!);
-      if (name && args) pushRecovered(results, name, args);
-    }
-    if (results.length > 0) break;
+  const closedRe = /<function=([a-zA-Z0-9_]+)([\s\S]*?)<\/function>/gi;
+  let match: RegExpExecArray | null;
+  while ((match = closedRe.exec(text)) !== null) {
+    tryAdd(match[1]!.trim(), match[2]!);
   }
 
   if (results.length === 0) {
-    const looseRe = /<function=([a-zA-Z0-9_]+)([\s\S]*?)<\/function>/gi;
-    let match: RegExpExecArray | null;
-    while ((match = looseRe.exec(text)) !== null) {
-      const name = match[1]!.trim();
-      const args = parseToolArguments(match[2]!);
-      if (name && args) pushRecovered(results, name, args);
-    }
-  }
-
-  if (results.length === 0) {
-    const truncatedRe = /<function=([a-zA-Z0-9_]+)\s*(?:\[\])?\s*(\{[\s\S]+)/gi;
-    let match: RegExpExecArray | null;
+    const truncatedRe = /<function=([a-zA-Z0-9_]+)([\s\S]+)/gi;
     while ((match = truncatedRe.exec(text)) !== null) {
-      const name = match[1]!.trim();
-      const args = parseToolArguments(match[2]!);
-      if (name && args) pushRecovered(results, name, args);
+      tryAdd(match[1]!.trim(), match[2]!);
+    }
+  }
+
+  if (results.length === 0) {
+    const toolCallRe = /<tool_call>\s*([a-zA-Z0-9_]+)([\s\S]*?)<\/tool_call>/gi;
+    while ((match = toolCallRe.exec(text)) !== null) {
+      tryAdd(match[1]!.trim(), match[2]!);
     }
   }
 

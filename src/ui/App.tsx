@@ -16,6 +16,7 @@ import type { PermissionRequest } from "../agent/loop.js";
 import { StartupBanner } from "./StartupBanner.js";
 import { getTheme } from "./theme.js";
 import { scrollViewportToBottom } from "./scroll.js";
+import { formatToolForDisplay } from "./format-tool.js";
 
 let nextMessageId = 0;
 
@@ -151,13 +152,19 @@ export function App({ session, workdir, onQuit }: AppProps) {
         case "tool_result":
           setDisplayMessages((prev) => [
             ...prev,
-            toDisplayMessage("tool", event.result, event.name),
+            toDisplayMessage("tool", formatToolForDisplay(event.name, event.result), event.name),
           ]);
           break;
         case "turn_end":
           const final = streamingRef.current;
           if (final) {
-            setDisplayMessages((prev) => [...prev, toDisplayMessage("assistant", final)]);
+            setDisplayMessages((prev) => {
+              const last = prev[prev.length - 1];
+              if (last?.role === "assistant" && last.content.trim() === final.trim()) {
+                return prev;
+              }
+              return [...prev, toDisplayMessage("assistant", final)];
+            });
           }
           streamingRef.current = "";
           setStreamingText("");
@@ -254,9 +261,11 @@ export function App({ session, workdir, onQuit }: AppProps) {
 
   return (
     <Box flexDirection="column">
-      <Box paddingX={2} marginBottom={1} flexShrink={0}>
-        <StartupBanner theme={theme} compact={hasChat} />
-      </Box>
+      {!hasChat && (
+        <Box paddingX={2} marginBottom={1} flexShrink={0}>
+          <StartupBanner theme={theme} />
+        </Box>
+      )}
 
       <ChatView
         messages={displayMessages}
