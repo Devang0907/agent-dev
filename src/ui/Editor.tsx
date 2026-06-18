@@ -1,25 +1,31 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { Box, Text } from "ink";
 import type { ThemeColors } from "./theme.js";
 import type { Model } from "../providers/types.js";
 import { modelRef } from "../config/models.js";
 import {
-  matchSlashCommands,
-  completeSlashInput,
-  SLASH_COMMANDS,
+  completeInput,
+  formatOneLineDescription,
+  getInputSuggestions,
+  type InputSuggestion,
+  type SkillNameOption,
 } from "./slash-commands.js";
 import { Panel } from "./Panel.js";
 import { SPINNER_FRAMES } from "./theme.js";
 import { useAppInput } from "./useAppInput.js";
 import { isPrintableTextInput } from "./mouse.js";
+import { useMouseScroll } from "./useMouseScroll.js";
+import { WHEEL_SCROLL_LINES } from "./mouse.js";
+import { clamp, SUGGESTION_PICKER_VISIBLE } from "./scroll.js";
 
 interface EditorProps {
   theme: ThemeColors;
   model: Model;
+  skills?: SkillNameOption[];
+  contentWidth?: number;
   disabled?: boolean;
   running?: boolean;
-  maxSuggestions?: number;
-  onSuggestionCountChange?: (count: number) => void;
+  onSuggestionsOpenChange?: (open: boolean) => void;
   onSubmit: (value: string) => void;
 }
 
@@ -28,19 +34,40 @@ function BlinkingCursor({ theme, visible }: { theme: ThemeColors; visible: boole
   return <Text color={theme.primary}>▌</Text>;
 }
 
+function truncateLine(line: string, max: number): string {
+  if (max <= 1 || line.length <= max) return line;
+  return `${line.slice(0, max - 1)}…`;
+}
+
+function applySuggestion(suggestion: InputSuggestion, isSkillCmd: boolean): string {
+  return isSkillCmd ? `${suggestion.cmd} ` : suggestion.cmd;
+}
+
 export function Editor({
   theme,
   model,
+  skills = [],
+  contentWidth = 72,
   disabled,
   running,
-  maxSuggestions = SLASH_COMMANDS.length,
-  onSuggestionCountChange,
+  onSuggestionsOpenChange,
   onSubmit,
 }: EditorProps) {
   const [value, setValue] = useState("");
-  const [suggestions, setSuggestions] = useState<typeof SLASH_COMMANDS[number][]>([]);
+  const [suggestions, setSuggestions] = useState<InputSuggestion[]>([]);
+  const [pickerIndex, setPickerIndex] = useState(0);
+  const [pickerScroll, setPickerScroll] = useState(0);
   const [spinIdx, setSpinIdx] = useState(0);
   const [cursorOn, setCursorOn] = useState(true);
+
+  const skillList = useMemo(() => skills, [skills]);
+  const isSkillPicker = value === "/skill" || value.startsWith("/skill ");
+  const pickerOpen = suggestions.length > 0;
+
+  useEffect(() => {
+    onSuggestionsOpenChange?.(pickerOpen);
+    return () => onSuggestionsOpenChange?.(false);
+  }, [pickerOpen, onSuggestionsOpenChange]);
 
   useEffect(() => {
     if (!running) return;
@@ -54,26 +81,83 @@ export function Editor({
     return () => clearInterval(id);
   }, [disabled]);
 
-  const visibleSuggestions = suggestions.slice(0, maxSuggestions);
+  const safePickerIndex = Math.min(pickerIndex, Math.max(0, suggestions.length - 1));
+  const maxPickerScroll = Math.max(0, suggestions.length - SUGGESTION_PICKER_VISIBLE);
+
+  const suggestionKey = suggestions.map((s) => s.cmd).join("\0");
 
   useEffect(() => {
-    onSuggestionCountChange?.(visibleSuggestions.length);
-    return () => onSuggestionCountChange?.(0);
-  }, [visibleSuggestions.length, onSuggestionCountChange]);
+    setPickerIndex(0);
+    setPickerScroll(0);
+  }, [suggestionKey]);
 
-  const updateSuggestions = (text: string) => {
-    if (text.startsWith("/")) {
-      setSuggestions(matchSlashCommands(text));
-    } else {
-      setSuggestions([]);
-    }
-  };
+  useEffect(() => {
+    setPickerIndex((i) => Math.min(i, Math.max(0, suggestions.length - 1)));
+  }, [suggestions.length]);
+
+  useEffect(() => {
+    setPickerScroll((prev) => {
+      if (safePickerIndex < prev) return safePickerIndex;
+      if (safePickerIndex >= prev + SUGGESTION_PICKER_VISIBLE) {
+        return safePickerIndex - SUGGESTION_PICKER_VISIBLE + 1;
+      }
+      return clamp(prev, 0, maxPickerScroll);
+    });
+  }, [safePickerIndex, maxPickerScroll]);
+
+  const updateSuggestions = useCallback(
+    (text: string) => {
+      setSuggestions(getInputSuggestions(text, skillList));
+    },
+    [skillList],
+  );
+
+  const fillSelected = useCallback(
+    (index: number) => {
+      const pick = suggestions[index];
+      if (!pick) return;
+      const next = applySuggestion(pick, isSkillPicker);
+      setValue(next);
+      setSuggestions(getInputSuggestions(next, skillList));
+    },
+    [suggestions, isSkillPicker, skillList],
+  );
+
+  const movePicker = useCallback(
+    (delta: number) => {
+      if (suggestions.length === 0) return;
+      setPickerIndex((i) => clamp(i + delta, 0, suggestions.length - 1));
+    },
+    [suggestions.length],
+  );
+
+  useMouseScroll(
+    (direction) => {
+      if (!pickerOpen) return;
+      movePicker(direction === "up" ? -WHEEL_SCROLL_LINES : WHEEL_SCROLL_LINES);
+    },
+    { isActive: pickerOpen && !disabled },
+  );
 
   useAppInput(
     (input, key) => {
       if (disabled) return;
 
+      if (pickerOpen && (key.upArrow || key.downArrow)) {
+        movePicker(key.upArrow ? -1 : 1);
+        return;
+      }
+
       if (key.return) {
+        if (isSkillPicker && pickerOpen) {
+          const pick = suggestions[safePickerIndex];
+          if (pick) {
+            onSubmit(pick.cmd);
+            setValue("");
+            setSuggestions([]);
+            return;
+          }
+        }
         const trimmed = value.trim();
         if (trimmed) onSubmit(trimmed);
         setValue("");
@@ -83,13 +167,12 @@ export function Editor({
 
       if (key.tab) {
         if (value.startsWith("/")) {
-          const completed = completeSlashInput(value);
+          const completed = completeInput(value, skillList);
           if (completed) {
             setValue(completed);
-            setSuggestions(matchSlashCommands(completed));
-          } else if (suggestions.length > 0) {
-            setValue(suggestions[0].cmd);
-            setSuggestions(matchSlashCommands(suggestions[0].cmd));
+            setSuggestions(getInputSuggestions(completed, skillList));
+          } else if (pickerOpen) {
+            fillSelected(safePickerIndex);
           }
         }
         return;
@@ -111,12 +194,18 @@ export function Editor({
     { isActive: !disabled },
   );
 
+  const visibleSuggestions = suggestions.slice(
+    pickerScroll,
+    pickerScroll + SUGGESTION_PICKER_VISIBLE,
+  );
+  const descMax = Math.max(16, contentWidth - 28);
+
   const placeholder = "Ask anything…";
   const showCursor = !disabled && cursorOn;
 
   return (
     <Box flexDirection="column" marginX={2}>
-      {visibleSuggestions.length > 0 && (
+      {pickerOpen && (
         <Box
           flexDirection="column"
           borderStyle="round"
@@ -124,12 +213,27 @@ export function Editor({
           paddingX={1}
           marginBottom={1}
         >
-          {visibleSuggestions.map((s) => (
-            <Text key={s.cmd}>
-              <Text color={theme.primary}>{s.cmd}</Text>
-              <Text color={theme.textMuted}> — {s.desc}</Text>
-            </Text>
-          ))}
+          <Box flexDirection="column" height={SUGGESTION_PICKER_VISIBLE} overflow="hidden">
+            {visibleSuggestions.map((s, row) => {
+              const index = pickerScroll + row;
+              const selected = index === safePickerIndex;
+              const desc = s.desc ? formatOneLineDescription(s.desc, descMax) : "";
+              const label = s.label ?? s.cmd;
+              const line = truncateLine(
+                `${selected ? "› " : "  "}${label}${desc ? ` — ${desc}` : ""}`,
+                contentWidth,
+              );
+              return (
+                <Text key={`${s.cmd}-${index}`} color={selected ? theme.primary : theme.text}>
+                  {line}
+                </Text>
+              );
+            })}
+          </Box>
+          <Text color={theme.textMuted}>
+            ↑↓ select · Enter run · Tab fill
+            {suggestions.length > 1 ? ` · ${safePickerIndex + 1}/${suggestions.length}` : ""}
+          </Text>
         </Box>
       )}
 
@@ -152,18 +256,18 @@ export function Editor({
         </Text>
       </Panel>
 
-        <Box marginTop={1} marginBottom={1}>
-          {running ? (
-            <Text color={theme.textMuted}>
-              <Text color={theme.primary}>{SPINNER_FRAMES[spinIdx]}</Text>
-              {" "}esc interrupt
-            </Text>
-          ) : (
-            <Text color={theme.textMuted}>
-              Tab completes /commands · ↑↓ wheel scroll · Ctrl+G latest
-            </Text>
-          )}
-        </Box>
+      <Box marginTop={1} marginBottom={1}>
+        {running ? (
+          <Text color={theme.textMuted}>
+            <Text color={theme.primary}>{SPINNER_FRAMES[spinIdx]}</Text>
+            {" "}esc interrupt
+          </Text>
+        ) : (
+          <Text color={theme.textMuted}>
+            Tab completes /commands · /skill ↑↓ pick · Enter run skill · Ctrl+G latest
+          </Text>
+        )}
+      </Box>
     </Box>
   );
 }

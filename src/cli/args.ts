@@ -48,6 +48,9 @@ Usage:
   agent -c                       Continue last session
   agent --model groq/llama-3.3-70b-versatile "prompt"
 
+  agent skills add vercel-labs/agent-skills
+  agent skills list
+
 Options:
   -p, --print          Print response and exit
   -c, --continue       Continue most recent session
@@ -57,6 +60,8 @@ Options:
 Commands (interactive):
   /model [search]      Select model
   /settings            Settings menu
+  /skills              Browse/install skills
+  /skill <name>        Load a skill for one turn
   /new                 New session
   /quit                Quit
 

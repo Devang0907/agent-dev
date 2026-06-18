@@ -4,10 +4,16 @@ import { loadSettings } from "./config/settings.js";
 import { SessionManager } from "./session/manager.js";
 import { AgentSession } from "./agent/session.js";
 import { parseArgs, printHelp } from "./cli/args.js";
+import { runSkillsCommand } from "./cli/skills.js";
 import { runPrintMode } from "./modes/print-mode.js";
 import { App } from "./ui/App.js";
 
 export async function main(): Promise<void> {
+  if (process.argv[2] === "skills") {
+    const code = await runSkillsCommand(process.argv.slice(3));
+    process.exit(code);
+  }
+
   const args = parseArgs(process.argv);
 
   if (args.help) {

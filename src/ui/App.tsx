@@ -25,13 +25,14 @@ import {
   chatViewportHeight,
   effectiveScrollTop,
   isFollowing,
-  maxSlashSuggestions,
   MIN_CHAT_ROWS,
   safeTerminalRows,
   slashSuggestionRows,
 } from "./scroll.js";
 import { useMouseScroll } from "./useMouseScroll.js";
 import { WHEEL_SCROLL_LINES } from "./mouse.js";
+import { SkillsView } from "./SkillsView.js";
+import { discoverSkills, resolveSkillCommand } from "../agent/skills.js";
 import { useAppInput } from "./useAppInput.js";
 
 let nextMessageId = 0;
@@ -64,7 +65,7 @@ export interface DisplayMessage {
   toolName?: string;
 }
 
-type Overlay = "none" | "model" | "settings" | "apiKey" | "commandApproval" | "sessions";
+type Overlay = "none" | "model" | "settings" | "skills" | "apiKey" | "commandApproval" | "sessions";
 
 interface AppProps {
   session: AgentSession;
@@ -82,7 +83,7 @@ export function App({ session, workdir, onQuit }: AppProps) {
   const { exit } = useApp();
   const terminal = useTerminalSize();
   const terminalRows = safeTerminalRows(terminal.rows);
-  const [suggestionCount, setSuggestionCount] = useState(0);
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const contentWidth = chatContentWidth(terminal.cols);
 
   const [displayMessages, setDisplayMessages] = useState<DisplayMessage[]>(() =>
@@ -107,13 +108,12 @@ export function App({ session, workdir, onQuit }: AppProps) {
   const theme = getTheme();
 
   const hasChat = displayMessages.length > 0 || streamingText.length > 0;
-  const minMainRows = hasChat ? MIN_CHAT_ROWS : suggestionCount > 0 ? 1 : 0;
+  const minMainRows = hasChat ? MIN_CHAT_ROWS : suggestionsOpen ? 1 : 0;
   const viewportHeight = chatViewportHeight(
     terminal.rows,
-    slashSuggestionRows(suggestionCount),
+    slashSuggestionRows(suggestionsOpen ? 1 : 0),
     minMainRows,
   );
-  const maxSuggestions = maxSlashSuggestions(terminal.rows, minMainRows);
 
   const chatLines = useMemo(
     () =>
@@ -282,7 +282,7 @@ export function App({ session, workdir, onQuit }: AppProps) {
 
   useMouseScroll(
     (direction) => {
-      if (overlay !== "none") return;
+      if (overlay !== "none" || suggestionsOpen) return;
       scrollBy(direction === "up" ? -WHEEL_SCROLL_LINES : WHEEL_SCROLL_LINES);
     },
     { isActive: overlay === "none" && hasChat },
@@ -290,7 +290,7 @@ export function App({ session, workdir, onQuit }: AppProps) {
 
   useAppInput(
     (input, key) => {
-      if (overlay !== "none") return;
+      if (overlay !== "none" || suggestionsOpen) return;
 
       if (key.escape && running) {
         session.abort();
@@ -358,6 +358,21 @@ export function App({ session, workdir, onQuit }: AppProps) {
         setOverlay("settings");
         return;
       }
+      if (value === "/skills") {
+        setOverlay("skills");
+        return;
+      }
+      if (value.startsWith("/skill add ")) {
+        setDisplayMessages((prev) => [
+          ...prev,
+          toDisplayMessage("user", value),
+          toDisplayMessage(
+            "assistant",
+            "Use /skills to install skills, or run: agent skills add <owner/repo>",
+          ),
+        ]);
+        return;
+      }
       if (value.startsWith("/model")) {
         const parts = value.split(/\s+/);
         setModelFilter(parts[1] ?? undefined);
@@ -373,7 +388,12 @@ export function App({ session, workdir, onQuit }: AppProps) {
 
       await session.prompt(value);
     },
-    [session, running, onQuit, exit, model, settings, openApiKeyPrompt],
+    [session, running, onQuit, exit, model, settings, openApiKeyPrompt, workdir],
+  );
+
+  const skillOptions = useMemo(
+    () => discoverSkills(workdir, settings).map((s) => ({ name: s.name, description: s.description })),
+    [workdir, settings],
   );
 
   const scrollHint =
@@ -393,6 +413,15 @@ export function App({ session, workdir, onQuit }: AppProps) {
           contentWidth={contentWidth}
           refreshKey={sessionListRefresh}
           onSelect={loadSession}
+          onClose={() => setOverlay("none")}
+        />
+      ) : overlay === "skills" ? (
+        <SkillsView
+          theme={theme}
+          settings={settings}
+          workdir={workdir}
+          viewportHeight={viewportHeight}
+          contentWidth={contentWidth}
           onClose={() => setOverlay("none")}
         />
       ) : overlay === "settings" ? (
@@ -475,7 +504,7 @@ export function App({ session, workdir, onQuit }: AppProps) {
         />
       ) : (
         <Box height={viewportHeight} overflow="hidden" flexShrink={0} paddingX={2}>
-          <StartupBanner theme={theme} compact={suggestionCount > 0} />
+          <StartupBanner theme={theme} compact={suggestionsOpen} />
         </Box>
       )}
 
@@ -486,10 +515,11 @@ export function App({ session, workdir, onQuit }: AppProps) {
           <Editor
             theme={theme}
             model={model}
+            skills={skillOptions}
+            contentWidth={contentWidth}
             disabled={running}
             running={running}
-            maxSuggestions={maxSuggestions}
-            onSuggestionCountChange={setSuggestionCount}
+            onSuggestionsOpenChange={setSuggestionsOpen}
             onSubmit={handleSubmit}
           />
         </Box>

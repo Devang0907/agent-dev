@@ -4,6 +4,7 @@ import type { ToolDefinition } from "../../providers/types.js";
 import { getShellConfig } from "../platform.js";
 import { executeShellCommand } from "./shell.js";
 import { resolvePath, assertWithinWorkdir } from "./paths.js";
+import { isSkillPath } from "../skills.js";
 
 export const readTool: ToolDefinition = {
   name: "read",
@@ -20,7 +21,9 @@ export const readTool: ToolDefinition = {
 
 export async function executeRead(args: { path: string }, workdir: string): Promise<string> {
   const filePath = resolvePath(args.path, workdir);
-  assertWithinWorkdir(filePath, workdir);
+  if (!isSkillPath(filePath)) {
+    assertWithinWorkdir(filePath, workdir);
+  }
   if (!existsSync(filePath)) {
     return `Error: file not found: ${args.path}`;
   }

@@ -34,6 +34,8 @@ export GEMINI_API_KEY=...             # Google Gemini
 | `/model` | Open model selector (grouped by provider) |
 | `/model groq` | Open selector filtered by search |
 | `/settings` | Thinking level, theme, API key status |
+| `/skills` | Browse and install skills (Vercel CLI) |
+| `/skill <name>` | Load a skill for the current turn |
 | `/new` | Clear session |
 | `/quit` | Exit |
 
@@ -51,7 +53,7 @@ Config and sessions are stored in `~/.agent-dev/`.
 
 ## Tools
 
-The agent has fourteen built-in tools:
+The agent has fifteen built-in tools:
 
 | Tool | Description |
 |------|-------------|
@@ -69,6 +71,7 @@ The agent has fourteen built-in tools:
 | `database` | Run SQL on SQLite files (mutations need approval) |
 | `verify` | Auto-run tests/build from `package.json` scripts |
 | `mcp` | Call tools from MCP servers (see below) |
+| `skill` | Load a skill by name from available_skills |
 
 File operations are restricted to the current working directory. Shell commands, git writes, SQL mutations, and MCP tool calls prompt for approval (`y` / `n`).
 
@@ -88,6 +91,51 @@ Add servers to `~/.agent-dev/mcp.json`:
 ```
 
 Use the `mcp` tool with `list_servers`, `list_tools`, and `call_tool` actions.
+
+### Skills
+
+Skills use the [Vercel Agent Skills](https://vercel.com/docs/agent-resources/skills) ecosystem (same format as OpenCode and Cursor).
+
+**Install skills:**
+
+```bash
+agent skills add vercel-labs/agent-skills
+agent skills add vercel-labs/agent-skills -g          # global
+agent skills find react
+agent skills list
+```
+
+In the TUI, run `/skills` and press `a` to install from a repo (press `o` to open the catalog in your browser).
+
+**Browse what's available:**
+
+- [skills.sh](https://skills.sh) — searchable directory of community + Vercel skills
+- [Vercel Agent Skills docs](https://vercel.com/docs/agent-resources/skills) — official curated list
+- `agent skills find <query>` — search from the terminal
+
+**Discovery paths** (later entries override same name):
+
+| Scope | Path |
+|-------|------|
+| Global (Vercel CLI) | `~/.config/agents/skills/` |
+| Global (compat) | `~/.agents/skills/` |
+| Project | `.agents/skills/` (walk up to git root) |
+| Agent config | `~/.agent-dev/skills/` |
+| Custom | `skills.paths` in `settings.json` |
+
+The agent sees an `<available_skills>` catalog in its system prompt and loads full instructions with the `skill` tool (or `/skill <name>` in chat).
+
+Filter skills in `~/.agent-dev/settings.json`:
+
+```json
+{
+  "skills": {
+    "enabled": ["vercel-react-best-practices"],
+    "disabled": ["canvas"],
+    "paths": ["~/team-skills"]
+  }
+}
+```
 
 ## License
 

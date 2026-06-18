@@ -33,6 +33,9 @@ export const FOOTER_ROWS = 3;
 /** Input panel, model line, hint, and margins. */
 export const EDITOR_ROWS = 10;
 const SUGGESTION_CHROME_ROWS = 3;
+/** Fixed visible rows inside the suggestion picker (scrollable). */
+export const SUGGESTION_PICKER_VISIBLE = 5;
+export const SUGGESTION_PANEL_ROWS = SUGGESTION_CHROME_ROWS + SUGGESTION_PICKER_VISIBLE;
 export const MIN_CHAT_ROWS = 6;
 
 export function safeTerminalRows(rows: number | undefined): number {
@@ -41,7 +44,7 @@ export function safeTerminalRows(rows: number | undefined): number {
 
 export function slashSuggestionRows(count: number): number {
   if (count === 0) return 0;
-  return SUGGESTION_CHROME_ROWS + count;
+  return SUGGESTION_PANEL_ROWS;
 }
 
 export function maxSlashSuggestions(

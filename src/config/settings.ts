@@ -3,11 +3,18 @@ import { CONFIG_DIR, SETTINGS_PATH } from "./paths.js";
 import type { ProviderId } from "../providers/types.js";
 import type { ThinkingLevel } from "../providers/types.js";
 
+export interface SkillsSettings {
+  enabled?: string[];
+  disabled?: string[];
+  paths?: string[];
+}
+
 export interface Settings {
   defaultProvider: ProviderId;
   defaultModel: string;
   thinkingLevel: ThinkingLevel;
   apiKeys?: Partial<Record<ProviderId, string>>;
+  skills?: SkillsSettings;
 }
 
 const DEFAULT_SETTINGS: Settings = {
@@ -29,6 +36,7 @@ export function loadSettings(): Settings {
       defaultModel: parsed.defaultModel ?? DEFAULT_SETTINGS.defaultModel,
       thinkingLevel: parsed.thinkingLevel ?? DEFAULT_SETTINGS.thinkingLevel,
       apiKeys: parsed.apiKeys,
+      skills: parsed.skills,
     };
   } catch {
     return { ...DEFAULT_SETTINGS };

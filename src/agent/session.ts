@@ -5,6 +5,7 @@ import { findModel } from "../config/models.js";
 import { setDefaultModel, saveSettings } from "../config/settings.js";
 import { getAvailableModels, getDefaultModelForProvider } from "../providers/registry.js";
 import { runAgentLoop, type AgentEvent, type PermissionRequest } from "./loop.js";
+import { resolveSkillCommand } from "./skills.js";
 import { SessionManager } from "../session/manager.js";
 import { generateSessionTitle, fallbackTitle } from "../session/title.js";
 
@@ -104,6 +105,68 @@ export class AgentSession extends EventEmitter {
 
   async prompt(content: string): Promise<void> {
     if (this.running) return;
+
+    const skillCommand = resolveSkillCommand(content, this.workdir, this.settings);
+    if (skillCommand.type === "list") return;
+    if (skillCommand.type === "error") {
+      this.running = true;
+      const userMsg: ChatMessage = { role: "user", content };
+      this.messages.push(userMsg);
+      this.sessionManager.appendMessage(userMsg);
+      this.emit("event", { type: "user_message", content } satisfies SessionEvent);
+      this.emit("event", { type: "message_start", role: "assistant" } satisfies AgentEvent);
+      this.emit("event", { type: "text_delta", delta: skillCommand.message } satisfies AgentEvent);
+      const assistantMsg: ChatMessage = { role: "assistant", content: skillCommand.message };
+      this.messages.push(assistantMsg);
+      this.sessionManager.appendMessage(assistantMsg);
+      this.emit("event", { type: "turn_end" } satisfies AgentEvent);
+      this.running = false;
+      this.sessionManager.saveAsLast();
+      return;
+    }
+    if (skillCommand.type === "prompt") {
+      const displayContent = content;
+      const agentContent = skillCommand.content;
+      this.running = true;
+
+      const isFirstMessage = this.messages.length === 0;
+      const userMsg: ChatMessage = { role: "user", content: displayContent };
+      this.messages.push(userMsg);
+      this.sessionManager.appendMessage(userMsg);
+      this.emit("event", { type: "user_message", content: displayContent } satisfies SessionEvent);
+
+      if (isFirstMessage) {
+        void this.generateSessionTitle(displayContent);
+      }
+
+      this.abortController = new AbortController();
+
+      try {
+        const loopMessages = [...this.messages.slice(0, -1), { role: "user" as const, content: agentContent }];
+        const newMessages = await runAgentLoop({
+          model: this.model,
+          messages: loopMessages,
+          settings: this.settings,
+          workdir: this.workdir,
+          signal: this.abortController.signal,
+          onEvent: (event) => this.emit("event", event),
+          onPermissionRequest: (request) => this.requestCommandPermission(request),
+        });
+
+        for (const msg of newMessages) {
+          if (msg.role !== "user") {
+            this.messages.push(msg);
+            this.sessionManager.appendMessage(msg);
+          }
+        }
+      } finally {
+        this.running = false;
+        this.abortController = undefined;
+        this.sessionManager.saveAsLast();
+      }
+      return;
+    }
+
     this.running = true;
 
     const isFirstMessage = this.messages.length === 0;

@@ -13,7 +13,9 @@ export function isTerminalNoise(input: string): boolean {
   if (!input) return false;
   if (input.includes("\x1b")) return true;
   if (/\[<[0-9;]+[mM]/.test(input)) return true;
-  if (/^[0-9;]+[mM]?$/.test(input)) return true;
+  // SGR/mouse CSI fragments (e.g. "64;10;20M") — not plain typed digits
+  if (/^[0-9]+(;[0-9]+)+[mM]?$/.test(input)) return true;
+  if (/^[0-9;]+[mM]$/.test(input)) return true;
   if (/^<[\d;]+[mM]?$/.test(input)) return true;
   for (const ch of input) {
     const code = ch.charCodeAt(0);
