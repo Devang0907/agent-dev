@@ -1,4 +1,3 @@
-import { execSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -12,13 +11,16 @@ function isGlobalInstall() {
     return true;
   }
 
-  try {
-    const globalRoot = execSync("npm root -g", { encoding: "utf8" }).trim();
-    const normalize = (value) => value.replace(/\\/g, "/").toLowerCase();
-    return normalize(pkgDir).startsWith(normalize(globalRoot));
-  } catch {
-    return false;
-  }
+  const initCwd = process.env.INIT_CWD;
+  if (!initCwd) return false;
+
+  const normalizedPkg = path.resolve(pkgDir);
+  const normalizedCwd = path.resolve(initCwd);
+
+  if (normalizedPkg === normalizedCwd) return false;
+
+  const localModules = path.join(normalizedCwd, "node_modules");
+  return !normalizedPkg.startsWith(localModules + path.sep);
 }
 
 if (!isGlobalInstall()) {
