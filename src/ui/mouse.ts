@@ -29,6 +29,11 @@ export function isPrintableTextInput(input: string): boolean {
   return true;
 }
 
+/** Windows terminals often send \x7f for Backspace; Ink maps that to key.delete. */
+export function isBackspaceChunk(chunk: string): boolean {
+  return chunk === "\b" || chunk === "\x1b\b" || chunk === "\x7f" || chunk === "\x1b\x7f";
+}
+
 function wheelFromButton(button: number): MouseWheelDirection | undefined {
   // SGR extended (xterm, Windows Terminal, VS Code)
   if (button === 64 || button === 36) return "up";
