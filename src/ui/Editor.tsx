@@ -183,10 +183,17 @@ export function Editor({
           insertAtCursor("\n");
           return;
         }
-        if (isSkillPicker && pickerOpen) {
+        if (pickerOpen) {
           const pick = suggestions[safePickerIndex];
           if (pick) {
-            onSubmit(pick.cmd);
+            if (isSkillPicker) {
+              onSubmit(pick.cmd);
+            } else if (pick.cmd === "/skill") {
+              setValueAndCursor("/skill ", "/skill ".length);
+              return;
+            } else {
+              onSubmit(pick.cmd);
+            }
             setValue("");
             setCursorPos(0);
             setSuggestions([]);
@@ -277,7 +284,7 @@ export function Editor({
             })}
           </Box>
           <Text color={theme.textMuted}>
-            ↑↓ select · Enter run · Tab fill
+            ↑↓ select · Enter open · Tab fill
             {suggestions.length > 1 ? ` · ${safePickerIndex + 1}/${suggestions.length}` : ""}
           </Text>
         </Box>
@@ -311,7 +318,7 @@ export function Editor({
           </Text>
         ) : (
           <Text color={theme.textMuted}>
-            Tab completes /commands · /skill ↑↓ pick · Enter run skill · Shift+Enter newline · Ctrl+G latest
+            Tab completes /commands · ↑↓ pick · Enter open · Shift+Enter newline · Ctrl+G latest
           </Text>
         )}
       </Box>

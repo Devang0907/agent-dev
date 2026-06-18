@@ -34,6 +34,7 @@ import { WHEEL_SCROLL_LINES } from "./mouse.js";
 import { SkillsView } from "./SkillsView.js";
 import { discoverSkills, resolveSkillCommand } from "../agent/skills.js";
 import { useAppInput } from "./useAppInput.js";
+import { isModelCommand } from "./slash-commands.js";
 
 let nextMessageId = 0;
 
@@ -373,7 +374,7 @@ export function App({ session, workdir, onQuit }: AppProps) {
         ]);
         return;
       }
-      if (value.startsWith("/model")) {
+      if (isModelCommand(value)) {
         const parts = value.split(/\s+/);
         setModelFilter(parts[1] ?? undefined);
         setOverlay("model");

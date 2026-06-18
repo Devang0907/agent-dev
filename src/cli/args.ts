@@ -58,7 +58,7 @@ Options:
   -h, --help           Show help
 
 Commands (interactive):
-  /model [search]      Select model
+  /model, /m [search]  Select model
   /settings            Settings menu
   /skills              Browse/install skills
   /skill <name>        Load a skill for one turn

@@ -1,5 +1,5 @@
 export const SLASH_COMMANDS = [
-  { cmd: "/model", desc: "Select provider & model" },
+  { cmd: "/model", desc: "Select provider & model", aliases: ["/m"] as const },
   { cmd: "/settings", desc: "Thinking level & API keys" },
   { cmd: "/skills", desc: "Browse and install Vercel skills" },
   { cmd: "/skill", desc: "Load a skill for one turn" },
@@ -39,9 +39,18 @@ export function longestCommonPrefix(strings: string[]): string {
   return prefix;
 }
 
+export function isModelCommand(input: string): boolean {
+  const trimmed = input.trim();
+  return trimmed === "/m" || trimmed === "/model" || trimmed.startsWith("/m ") || trimmed.startsWith("/model ");
+}
+
 export function matchSlashCommands(input: string): typeof SLASH_COMMANDS[number][] {
   if (!input.startsWith("/")) return [];
-  return SLASH_COMMANDS.filter((c) => c.cmd.startsWith(input));
+  return SLASH_COMMANDS.filter((c) => {
+    if (c.cmd.startsWith(input)) return true;
+    const aliases = "aliases" in c ? c.aliases : undefined;
+    return aliases?.some((a) => a.startsWith(input) || input === a || input.startsWith(`${a} `));
+  });
 }
 
 export function matchSkillSuggestions(
