@@ -4,10 +4,13 @@ import {
   writeTool,
   editTool,
   bashTool,
+  execTool,
   executeRead,
   executeWrite,
   executeEdit,
   executeBash,
+  executeExec,
+  commandFromExecArgs,
 } from "./read.js";
 import { webSearchTool, executeWebSearch } from "./search.js";
 import { grepTool, executeGrep } from "./grep.js";
@@ -34,6 +37,7 @@ export const BUILTIN_TOOLS: AgentTool[] = [
   { definition: grepTool, execute: (args, wd) => executeGrep(args as { pattern: string; path?: string; glob?: string; case_insensitive?: boolean; context?: number }, wd) },
   { definition: gitTool, execute: (args, wd) => executeGit(args as { action: string; args?: string }, wd) },
   { definition: bashTool, execute: (args, wd) => executeBash(args as { command: string }, wd) },
+  { definition: execTool, execute: (args, wd) => executeExec(args, wd) },
   { definition: webSearchTool, execute: (args) => executeWebSearch(args as { query: string }) },
   { definition: docsTool, execute: (args) => executeDocs(args as { query: string; source?: string; url?: string }) },
   { definition: memoryTool, execute: (args) => executeMemory(args as { action: string; key?: string; value?: string }) },
@@ -48,7 +52,7 @@ export const BUILTIN_TOOLS: AgentTool[] = [
 export const PERMISSION_REQUIRED_TOOLS = new Set(["bash"]);
 
 export function needsToolPermission(name: string, args: Record<string, unknown>): boolean {
-  if (name === "bash") return true;
+  if (name === "bash" || name === "exec") return true;
   if (name === "git") return isGitWriteAction(String(args.action ?? ""));
   if (name === "database") return !isSelectOnlyQuery(String(args.query ?? ""));
   if (name === "mcp") return String(args.action ?? "").toLowerCase() === "call_tool";
@@ -56,7 +60,12 @@ export function needsToolPermission(name: string, args: Record<string, unknown>)
 }
 
 export function formatPermissionCommand(name: string, args: Record<string, unknown>): string {
-  if (name === "bash") return String(args.command ?? "");
+  if (name === "bash" || name === "exec") {
+    if (name === "exec") {
+      return String(commandFromExecArgs(args) ?? "");
+    }
+    return String(args.command ?? "");
+  }
   if (name === "git") return formatGitPermissionCommand(args);
   if (name === "database") return formatDatabasePermissionCommand(args);
   if (name === "mcp") return formatMcpPermissionCommand(args);

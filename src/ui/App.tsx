@@ -446,6 +446,7 @@ export function App({ session, workdir, onQuit }: AppProps) {
           settings={settings}
           filter={modelFilter}
           viewportHeight={viewportHeight}
+          contentWidth={contentWidth}
           onSelect={(m) => {
             if (!hasProviderAuth(m.provider, settings)) {
               openApiKeyPrompt(m, "model");
@@ -467,6 +468,7 @@ export function App({ session, workdir, onQuit }: AppProps) {
             theme={theme}
             provider={pendingModel.provider}
             model={pendingModel}
+            contentWidth={contentWidth}
             onSubmit={saveApiKey}
             onCancel={() => {
               setPendingModel(null);

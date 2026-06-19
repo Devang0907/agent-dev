@@ -115,3 +115,45 @@ export async function executeBash(
   }
   return result;
 }
+
+/** Groq gpt-oss models sometimes call `exec` instead of `bash`. */
+export const execTool: ToolDefinition = {
+  name: "exec",
+  description: "Run a shell command. Prefer the bash tool when possible.",
+  parameters: {
+    type: "object",
+    properties: {
+      command: { type: "string", description: "Shell command to execute" },
+      cmd: {
+        description: "Command string or argv array (legacy alias)",
+      },
+    },
+    additionalProperties: true,
+  },
+};
+
+export function commandFromExecArgs(args: Record<string, unknown>): string | undefined {
+  const direct = args.command ?? args.cmd;
+  if (typeof direct === "string" && direct.trim()) return direct.trim();
+  if (!Array.isArray(direct)) return undefined;
+
+  const parts = direct.map(String).filter(Boolean);
+  if (parts.length === 0) return undefined;
+
+  if (parts[0] === "bash" || parts[0] === "sh") {
+    const flag = parts[1];
+    if (flag === "-c" || flag === "lc") return parts.slice(2).join(" ").trim();
+    return parts.slice(1).join(" ").trim();
+  }
+
+  return parts.join(" ").trim();
+}
+
+export async function executeExec(
+  args: Record<string, unknown>,
+  workdir: string,
+): Promise<string> {
+  const command = commandFromExecArgs(args);
+  if (!command) return "Error: command is required";
+  return executeBash({ command }, workdir);
+}

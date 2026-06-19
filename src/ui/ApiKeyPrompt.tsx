@@ -12,6 +12,7 @@ interface ApiKeyPromptProps {
   theme: ThemeColors;
   provider: ProviderId;
   model: Model;
+  contentWidth?: number;
   onSubmit: (apiKey: string) => void;
   onCancel: () => void;
 }
@@ -21,7 +22,14 @@ function BlinkingCursor({ theme, visible }: { theme: ThemeColors; visible: boole
   return <Text color={theme.primary}>▌</Text>;
 }
 
-export function ApiKeyPrompt({ theme, provider, model, onSubmit, onCancel }: ApiKeyPromptProps) {
+export function ApiKeyPrompt({
+  theme,
+  provider,
+  model,
+  contentWidth = 72,
+  onSubmit,
+  onCancel,
+}: ApiKeyPromptProps) {
   const [value, setValue] = useState("");
   const [cursorOn, setCursorOn] = useState(true);
 
@@ -59,38 +67,47 @@ export function ApiKeyPrompt({ theme, provider, model, onSubmit, onCancel }: Api
   const masked = "•".repeat(value.length);
 
   return (
-    <Box flexDirection="column" marginX={2} marginTop={1} marginBottom={1}>
+    <Box flexDirection="column" marginTop={1} width={contentWidth}>
       <LeftBorder theme={theme} borderColor={theme.primary}>
-        <Text color={theme.text} bold>API key required</Text>
-        <Text color={theme.textMuted}> Enter save · Esc cancel</Text>
+        <Text color={theme.text} bold>
+          API key required
+        </Text>
+        <Text color={theme.textMuted}>Enter save · Esc cancel</Text>
 
         <Box flexDirection="column" marginTop={1}>
-          <Text color={theme.textMuted}>Provider: {PROVIDER_LABELS[provider]}</Text>
-          <Text color={theme.textMuted}>Model: {model.name}</Text>
+          <Text color={theme.textMuted}>
+            Provider: <Text color={theme.text}>{PROVIDER_LABELS[provider]}</Text>
+          </Text>
+          <Text color={theme.textMuted}>
+            Model: <Text color={theme.text}>{model.name}</Text>
+          </Text>
         </Box>
 
         <Box
-          flexDirection="row"
           marginTop={1}
+          flexDirection="column"
+          width={contentWidth - 2}
           borderStyle="round"
           borderColor={theme.primary}
           paddingX={1}
-          paddingY={0}
+          paddingY={1}
         >
-          {value.length > 0 ? (
-            <>
-              <Text color={theme.text}>{masked}</Text>
-              <BlinkingCursor theme={theme} visible={cursorOn} />
-            </>
-          ) : (
-            <>
-              <Text color={theme.textMuted}>Paste API key here…</Text>
-              <BlinkingCursor theme={theme} visible={cursorOn} />
-            </>
-          )}
+          <Box flexDirection="row" minHeight={1}>
+            {value.length > 0 ? (
+              <Text color={theme.text}>
+                {masked}
+                <BlinkingCursor theme={theme} visible={cursorOn} />
+              </Text>
+            ) : (
+              <Text color={theme.textMuted}>
+                <BlinkingCursor theme={theme} visible={cursorOn} />
+                Paste API key here…
+              </Text>
+            )}
+          </Box>
         </Box>
 
-        <Box marginTop={1}>
+        <Box flexDirection="column" marginTop={1}>
           <Text color={theme.textMuted}>Or set env: {envVars.join(" · ")}</Text>
           <Text color={theme.textMuted}>Saved to ~/.agent-dev/settings.json</Text>
         </Box>
