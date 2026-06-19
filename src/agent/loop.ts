@@ -2,6 +2,7 @@ import {
   normalizeToolCalls,
   parseMalformedToolCalls,
   extractFailedGeneration,
+  sanitizeErrorForUser,
 } from "../providers/openai-compat.js";
 import { streamChat } from "../providers/registry.js";
 import type { ChatMessage, Model, ToolCall } from "../providers/types.js";
@@ -82,8 +83,11 @@ function resolveToolCalls(content: string, toolCalls: ToolCall[], error?: string
   if (error) {
     const failed = extractFailedGeneration(error);
     if (failed) {
-      return dedupeToolCalls(normalizeToolCalls(parseMalformedToolCalls(failed)));
+      const fromFailed = dedupeToolCalls(normalizeToolCalls(parseMalformedToolCalls(failed)));
+      if (fromFailed.length > 0) return fromFailed;
     }
+    const fromError = dedupeToolCalls(normalizeToolCalls(parseMalformedToolCalls(error)));
+    if (fromError.length > 0) return fromError;
   }
 
   return [];
@@ -248,6 +252,7 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<ChatMessa
     effectivePrompt += `\n\n${modeSwitchNote}`;
   }
   let toolRound = 0;
+  let malformedToolRetry = false;
 
   while (true) {
     if (signal?.aborted) break;
@@ -277,7 +282,18 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<ChatMessa
         finishGracefully(context, content, onEvent);
         break;
       }
-      onEvent({ type: "error", message: error });
+      if (isToolUseFailedError(error) && !malformedToolRetry) {
+        malformedToolRetry = true;
+        effectivePrompt +=
+          "\n\nIMPORTANT: Your last output used invalid <function=...> text. Use structured tool_calls with valid JSON only. Retry the user's request now.";
+        continue;
+      }
+      if (isToolUseFailedError(error)) {
+        finishGracefully(context, "Please try your request again.", onEvent);
+        break;
+      }
+      const userError = sanitizeErrorForUser(error);
+      if (userError) onEvent({ type: "error", message: userError });
       break;
     }
 
@@ -289,8 +305,9 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<ChatMessa
     context.push(assistantMsg);
 
     if (uniqueCalls.length === 0) {
-      if (error) {
-        onEvent({ type: "error", message: error });
+      const userError = error ? sanitizeErrorForUser(error) : null;
+      if (userError) {
+        onEvent({ type: "error", message: userError });
       } else {
         onEvent({ type: "turn_end" });
       }

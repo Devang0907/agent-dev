@@ -49,11 +49,17 @@ export function buildChatLines(
     }
 
     const icon = TOOL_ICONS[msg.toolName ?? ""] ?? "·";
-    lines.push({
-      id: `${msg.id}-t`,
-      text: `  ${icon} ${msg.content}`,
-      tone: "textMuted",
-    });
+    const toolLines = msg.content.split("\n");
+    for (const [i, line] of toolLines.entries()) {
+      const prefix = i === 0 ? `  ${icon} ` : "     ";
+      for (const [j, wline] of wrapText(line, Math.max(10, opts.width - prefix.length)).entries()) {
+        lines.push({
+          id: `${msg.id}-t-${i}-${j}`,
+          text: `${j === 0 ? prefix : "     "}${wline}`,
+          tone: "textMuted",
+        });
+      }
+    }
   }
 
   if (opts.streamingText) {

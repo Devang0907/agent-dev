@@ -21,8 +21,11 @@ export function formatToolForDisplay(toolName: string, result: string): string {
   if (toolName === "diff") {
     return result.startsWith("No changes") ? result : "generated diff";
   }
-  if (toolName === "memory" || toolName === "plan") {
+  if (toolName === "memory") {
     return result.split("\n")[0] ?? toolName;
+  }
+  if (toolName === "plan") {
+    return result;
   }
   if (toolName === "database") {
     return result.startsWith("Error:") ? result.split("\n")[0] ?? result : "ran SQL query";

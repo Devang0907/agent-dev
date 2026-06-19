@@ -33,9 +33,11 @@ import { useMouseScroll } from "./useMouseScroll.js";
 import { WHEEL_SCROLL_LINES } from "./mouse.js";
 import { SkillsView } from "./SkillsView.js";
 import { discoverSkills } from "../agent/skills.js";
+import { loadPlanSummary } from "../agent/tools/plan.js";
 import type { AgentMode } from "../agent/mode.js";
 import { useAppInput } from "./useAppInput.js";
 import { isModelCommand } from "./slash-commands.js";
+import { sanitizeErrorForUser } from "../providers/openai-compat.js";
 
 let nextMessageId = 0;
 
@@ -252,19 +254,26 @@ export function App({ session, workdir, onQuit }: AppProps) {
           setStreamingText("");
           setRunning(false);
           break;
-        case "error":
+        case "error": {
+          const msg = sanitizeErrorForUser(event.message);
+          if (!msg) {
+            setRunning(false);
+            setPendingCommand(null);
+            break;
+          }
           setDisplayMessages((prev) => [
             ...prev,
-            toDisplayMessage("assistant", `Error: ${event.message}`),
+            toDisplayMessage("assistant", `Error: ${msg}`),
           ]);
           streamingRef.current = "";
           setStreamingText("");
           setRunning(false);
           setPendingCommand(null);
-          if (/Missing .*API_KEY/i.test(event.message)) {
+          if (/Missing .*API_KEY/i.test(msg)) {
             openApiKeyPrompt(model, "none");
           }
           break;
+        }
         case "permission_request":
           setPendingCommand(event.request);
           setOverlay("commandApproval");
@@ -371,6 +380,18 @@ export function App({ session, workdir, onQuit }: AppProps) {
       }
       if (value === "/plan") {
         session.setAgentMode("plan");
+        return;
+      }
+      if (value === "/tasks") {
+        const summary = loadPlanSummary();
+        setDisplayMessages((prev) => [
+          ...prev,
+          toDisplayMessage("user", value),
+          toDisplayMessage(
+            "assistant",
+            summary || "No active plan. Ask the agent to create one, or it will use the plan tool automatically.",
+          ),
+        ]);
         return;
       }
       if (value === "/skills") {

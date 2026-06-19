@@ -46,15 +46,51 @@ function stripToolArgWrapper(raw: string): string {
 }
 
 function argsFromFunctionTail(tail: string): string | null {
-  const jsonIdx = tail.indexOf("{");
-  if (jsonIdx >= 0) return parseToolArguments(tail.slice(jsonIdx));
+  const cleaned = tail.trim().replace(/^[,=>\s]+/, "");
+  const jsonIdx = cleaned.indexOf("{");
+  const source = jsonIdx >= 0 ? cleaned.slice(jsonIdx) : cleaned;
+  if (jsonIdx >= 0) {
+    const parsed = parseToolArguments(source);
+    if (parsed) return parsed;
+  }
 
   // Groq/Llama sometimes emit ("query": "value") without braces.
-  let body = stripToolArgWrapper(tail);
+  let body = stripToolArgWrapper(cleaned);
   if (!body.startsWith("{") && body.includes(":")) {
     body = `{${body}}`;
   }
   return parseToolArguments(body);
+}
+
+function extractStringArrayField(body: string, field: string): string[] | undefined {
+  const block = body.match(new RegExp(`"${field}"\\s*:\\s*\\[([\\s\\S]*?)(?:\\]|$)`));
+  if (!block) return undefined;
+  const values: string[] = [];
+  const re = /"((?:\\.|[^"\\])*)"/g;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(block[1]!)) !== null) {
+    const value = unescapeJsonString(match[1]!);
+    if (value.trim()) values.push(value.trim());
+  }
+  return values.length > 0 ? values : undefined;
+}
+
+function parsePlanArguments(body: string): string | null {
+  const actionMatch = body.match(/"action"\s*:\s*"((?:\\.|[^"\\])*)"/);
+  if (!actionMatch) return null;
+
+  const out: Record<string, unknown> = {
+    action: unescapeJsonString(actionMatch[1]!),
+  };
+
+  const titleMatch = body.match(/"title"\s*:\s*"((?:\\.|[^"\\])*)"/);
+  if (titleMatch) out.title = unescapeJsonString(titleMatch[1]!);
+
+  const tasks = extractStringArrayField(body, "tasks");
+  if (tasks) out.tasks = tasks;
+
+  if (out.action === "create" && !out.tasks) return null;
+  return JSON.stringify(out);
 }
 
 function parseToolArguments(raw: string): string | null {
@@ -95,6 +131,14 @@ function parseToolArguments(raw: string): string | null {
     return JSON.stringify({ path: unescapeJsonString(pathMatch[1]!) });
   }
 
+  const planArgs = parsePlanArguments(body);
+  if (planArgs) return planArgs;
+
+  const nameMatch = body.match(/"name"\s*:\s*"((?:\\.|[^"\\])*)"/);
+  if (nameMatch) {
+    return JSON.stringify({ name: unescapeJsonString(nameMatch[1]!) });
+  }
+
   return null;
 }
 
@@ -115,10 +159,18 @@ export function parseMalformedToolCalls(text: string): ToolCall[] {
     if (name && args) pushRecovered(results, name, args);
   };
 
-  const closedRe = /<function=([a-zA-Z0-9_]+)([\s\S]*?)<\/function>/gi;
+  // Groq: <function=plan,{"action":"create",...}
+  const commaJsonRe = /<function=([a-zA-Z0-9_]+)\s*,\s*(\{[\s\S]*)/gi;
   let match: RegExpExecArray | null;
-  while ((match = closedRe.exec(text)) !== null) {
+  while ((match = commaJsonRe.exec(text)) !== null) {
     tryAdd(match[1]!.trim(), match[2]!);
+  }
+
+  if (results.length === 0) {
+    const closedRe = /<function=([a-zA-Z0-9_]+)([\s\S]*?)<\/function>/gi;
+    while ((match = closedRe.exec(text)) !== null) {
+      tryAdd(match[1]!.trim(), match[2]!);
+    }
   }
 
   if (results.length === 0) {
@@ -142,7 +194,23 @@ export function extractFailedGeneration(errorMessage: string): string | null {
   const marker = "Model output:";
   const idx = errorMessage.indexOf(marker);
   if (idx >= 0) return errorMessage.slice(idx + marker.length).trim();
+
+  const groqMatch = errorMessage.match(/failed_generation['":\s]+([\s\S]+)/i);
+  if (groqMatch) return groqMatch[1]!.trim();
+
   return null;
+}
+
+/** Strip internal API details before showing errors in the UI. */
+export function sanitizeErrorForUser(errorMessage: string): string | null {
+  if (/Failed to call a function|tool_use_failed|failed_generation/i.test(errorMessage)) {
+    return null;
+  }
+  const marker = "Model output:";
+  const idx = errorMessage.indexOf(marker);
+  const cleaned = (idx >= 0 ? errorMessage.slice(0, idx) : errorMessage).trim();
+  if (!cleaned || /Failed to call a function/i.test(cleaned)) return null;
+  return cleaned;
 }
 
 export function toOpenAIMessages(ctx: ChatContext): OpenAI.Chat.ChatCompletionMessageParam[] {
@@ -238,6 +306,6 @@ export function formatApiError(err: unknown): string {
   const apiErr = err as { message?: string; error?: { message?: string; failed_generation?: string } };
   const failed = apiErr.error?.failed_generation;
   const msg = apiErr.error?.message ?? apiErr.message ?? "API error";
-  if (failed) return `${msg}\nModel output: ${failed.slice(0, 300)}`;
+  if (failed) return `${msg}\nModel output: ${failed}`;
   return msg;
 }
