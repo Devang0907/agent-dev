@@ -33,11 +33,27 @@ export GEMINI_API_KEY=...             # Google Gemini
 |---------|-------------|
 | `/model` | Open model selector (grouped by provider) |
 | `/model groq` | Open selector filtered by search |
+| `/build` | Switch to Build mode (full tool access) |
+| `/plan` | Switch to Plan mode (read-only exploration) |
 | `/settings` | Thinking level, theme, API key status |
 | `/skills` | Browse and install skills (Vercel CLI) |
 | `/skill <name>` | Load a skill for the current turn |
 | `/new` | Clear session |
 | `/quit` | Exit |
+
+## Agent modes
+
+Switch between **Build** and **Plan** mode like OpenCode:
+
+| Mode | Toggle | Behavior |
+|------|--------|----------|
+| **Build** (default) | Tab / `/build` | Full tool access — edit files, run shell, verify |
+| **Plan** | Tab / `/plan` | Read-only — explore code, research, write plans to `.agent-dev/plans/*.md` |
+
+- **Tab** cycles mode when the input is empty (Shift+Tab reverses)
+- Current mode is shown in the prompt footer (`Build` or `Plan`)
+- Plan mode blocks write/edit/bash/verify/database/MCP; git write actions are denied
+- Switch Plan → Build before implementing; the agent gets a reminder to execute the plan
 
 ## CLI
 

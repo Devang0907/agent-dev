@@ -1,7 +1,9 @@
-import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
+import { dirname } from "node:path";
 import { platform as osPlatform } from "node:os";
 import type { ToolDefinition } from "../../providers/types.js";
 import { getShellConfig } from "../platform.js";
+import { isAllowedPlanWritePath } from "../mode.js";
 import { executeShellCommand } from "./shell.js";
 import { resolvePath, assertWithinWorkdir } from "./paths.js";
 import { isSkillPath } from "../skills.js";
@@ -51,6 +53,9 @@ export async function executeWrite(
 ): Promise<string> {
   const filePath = resolvePath(args.path, workdir);
   assertWithinWorkdir(filePath, workdir);
+  if (isAllowedPlanWritePath(args.path)) {
+    mkdirSync(dirname(filePath), { recursive: true });
+  }
   writeFileSync(filePath, args.content, "utf-8");
   return `Written ${args.content.length} bytes to ${args.path}`;
 }

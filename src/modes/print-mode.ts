@@ -46,6 +46,7 @@ export async function runPrintMode(session: AgentSession, prompt: string): Promi
     messages: [...prior, userMsg],
     settings: session.getSettings(),
     workdir: process.cwd(),
+    agentMode: session.getAgentMode(),
     onPermissionRequest: promptCommandApproval,
     onEvent: (event) => {
       if (event.type === "text_delta") {

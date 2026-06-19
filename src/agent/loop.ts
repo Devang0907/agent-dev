@@ -6,8 +6,9 @@ import {
 import { streamChat } from "../providers/registry.js";
 import type { ChatMessage, Model, ToolCall } from "../providers/types.js";
 import type { Settings } from "../config/settings.js";
-import { getToolDefinitions, executeTool, needsToolPermission, formatPermissionCommand } from "./tools/index.js";
+import { getToolDefinitions, executeTool, needsToolPermission, formatPermissionCommand, checkPlanModeToolBlock } from "./tools/index.js";
 import { setSkillContext } from "./skills.js";
+import type { AgentMode } from "./mode.js";
 import {
   buildDefaultSystemPrompt,
   buildSystemPrompt,
@@ -39,6 +40,8 @@ export interface AgentLoopOptions {
   messages: ChatMessage[];
   settings: Settings;
   workdir: string;
+  agentMode?: AgentMode;
+  modeSwitchNote?: string;
   systemPrompt?: string;
   signal?: AbortSignal;
   onEvent: (event: AgentEvent) => void;
@@ -90,6 +93,7 @@ async function runToolBatch(
   uniqueCalls: ToolCall[],
   context: ChatMessage[],
   workdir: string,
+  agentMode: AgentMode,
   callCounts: Map<string, number>,
   onEvent: (event: AgentEvent) => void,
   onPermissionRequest?: (request: PermissionRequest) => Promise<boolean>,
@@ -103,6 +107,13 @@ async function runToolBatch(
       args = JSON.parse(tc.arguments || "{}");
     } catch {
       args = {};
+    }
+
+    const planBlock = checkPlanModeToolBlock(agentMode, tc.name, args, workdir);
+    if (planBlock) {
+      onEvent({ type: "tool_result", toolCallId: tc.id, name: tc.name, result: planBlock });
+      context.push({ role: "tool", content: planBlock, toolCallId: tc.id, name: tc.name });
+      continue;
     }
 
     const sig = toolSignature(tc.name, args);
@@ -157,10 +168,11 @@ async function collectStream(
   messages: ChatMessage[],
   settings: Settings,
   systemPrompt: string,
+  agentMode: AgentMode,
   signal?: AbortSignal,
   onEvent?: (event: AgentEvent) => void,
 ): Promise<{ content: string; toolCalls: ToolCall[]; error?: string }> {
-  const tools = getToolDefinitions();
+  const tools = getToolDefinitions(agentMode);
   let content = "";
   const toolCallMap: Map<number, ToolCall> = new Map();
 
@@ -216,6 +228,8 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<ChatMessa
     messages,
     settings,
     workdir,
+    agentMode = settings.agentMode ?? "build",
+    modeSwitchNote,
     systemPrompt = DEFAULT_SYSTEM_PROMPT,
     signal,
     onEvent,
@@ -226,7 +240,13 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<ChatMessa
   const callCounts = new Map<string, number>();
   setSkillContext({ workdir, settings });
   try {
-  const effectivePrompt = systemPromptForModel(model, buildSystemPrompt(workdir, settings, systemPrompt));
+  let effectivePrompt = systemPromptForModel(
+    model,
+    buildSystemPrompt(workdir, { ...settings, agentMode }, systemPrompt),
+  );
+  if (modeSwitchNote) {
+    effectivePrompt += `\n\n${modeSwitchNote}`;
+  }
   let toolRound = 0;
 
   while (true) {
@@ -245,6 +265,7 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<ChatMessa
       context,
       settings,
       effectivePrompt,
+      agentMode,
       signal,
       onEvent,
     );
@@ -280,6 +301,7 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<ChatMessa
       uniqueCalls,
       context,
       workdir,
+      agentMode,
       callCounts,
       onEvent,
       onPermissionRequest,

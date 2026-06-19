@@ -1,4 +1,6 @@
 import type { ToolDefinition } from "../../providers/types.js";
+import type { AgentMode } from "../mode.js";
+import { getToolDefinitionsForMode, isToolBlockedInPlanMode } from "../mode.js";
 import {
   readTool,
   writeTool,
@@ -72,8 +74,19 @@ export function formatPermissionCommand(name: string, args: Record<string, unkno
   return name;
 }
 
-export function getToolDefinitions(): ToolDefinition[] {
-  return BUILTIN_TOOLS.map((t) => t.definition);
+export function getToolDefinitions(mode: AgentMode = "build"): ToolDefinition[] {
+  const all = BUILTIN_TOOLS.map((t) => t.definition);
+  return getToolDefinitionsForMode(all, mode) as ToolDefinition[];
+}
+
+export function checkPlanModeToolBlock(
+  mode: AgentMode,
+  name: string,
+  args: Record<string, unknown>,
+  workdir: string,
+): string | null {
+  if (mode !== "plan") return null;
+  return isToolBlockedInPlanMode(name, args, workdir);
 }
 
 export async function executeTool(

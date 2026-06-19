@@ -1,5 +1,7 @@
 import type { Model } from "../providers/types.js";
 import type { Settings } from "../config/settings.js";
+import type { AgentMode } from "./mode.js";
+import { buildModeSystemAppend, getToolDefinitionsForMode, planModeSystemAppend } from "./mode.js";
 import { getPlatformContext } from "./platform.js";
 import { discoverSkills, formatSkillsCatalog } from "./skills.js";
 import { loadMemorySummary } from "./tools/memory.js";
@@ -52,8 +54,14 @@ function formatDate(): string {
   return `${year}-${month}-${day}`;
 }
 
-function buildToolsSection(): string {
-  const lines = Object.entries(TOOL_SNIPPETS).map(([name, desc]) => `- ${name}: ${desc}`);
+function buildToolsSection(mode: AgentMode = "build"): string {
+  const all = Object.entries(TOOL_SNIPPETS);
+  const filtered = getToolDefinitionsForMode(all.map(([name]) => ({ name })), mode);
+  const allowed = new Set(filtered.map((t) => t.name));
+  const lines = all.filter(([name]) => allowed.has(name)).map(([name, desc]) => `- ${name}: ${desc}`);
+  if (mode === "plan") {
+    lines.push("- write/edit: allowed ONLY for `.agent-dev/plans/*.md` plan files");
+  }
   return lines.join("\n");
 }
 
@@ -65,20 +73,24 @@ function buildToolCallingSection(): string {
   return TOOL_CALLING_RULES.map((r) => `- ${r}`).join("\n");
 }
 
-export function buildDefaultSystemPrompt(): string {
-  const cwd = process.cwd().replace(/\\/g, "/");
+export function buildDefaultSystemPrompt(workdir?: string, mode: AgentMode = "build"): string {
+  const cwd = (workdir ?? process.cwd()).replace(/\\/g, "/");
   const date = formatDate();
+  const modeSection = mode === "plan" ? planModeSystemAppend(cwd) : buildModeSystemAppend();
 
   return `You are an expert coding assistant operating inside agent-dev, a terminal coding agent harness. You help users by reading files, searching code, executing commands, editing code, and writing new files.
 
 Available tools:
-${buildToolsSection()}
+${buildToolsSection(mode)}
 
 Guidelines:
 ${buildGuidelinesSection()}
 
 Tool calling (critical):
 ${buildToolCallingSection()}
+
+Agent mode:
+${modeSection}
 
 Environment:
 ${getPlatformContext()}
@@ -88,7 +100,8 @@ Current working directory: ${cwd}`;
 }
 
 export function buildSystemPrompt(workdir: string, settings: Settings, base?: string): string {
-  const core = base ?? buildDefaultSystemPrompt();
+  const mode = settings.agentMode ?? "build";
+  const core = base ?? buildDefaultSystemPrompt(workdir, mode);
   const memory = loadMemorySummary();
   const plan = loadPlanSummary();
   const skills = formatSkillsCatalog(discoverSkills(workdir, settings));

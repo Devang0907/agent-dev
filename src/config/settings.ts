@@ -2,6 +2,8 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { CONFIG_DIR, SETTINGS_PATH } from "./paths.js";
 import type { ProviderId } from "../providers/types.js";
 import type { ThinkingLevel } from "../providers/types.js";
+import type { AgentMode } from "../agent/mode.js";
+import { parseAgentMode } from "../agent/mode.js";
 
 export interface SkillsSettings {
   enabled?: string[];
@@ -13,6 +15,7 @@ export interface Settings {
   defaultProvider: ProviderId;
   defaultModel: string;
   thinkingLevel: ThinkingLevel;
+  agentMode?: AgentMode;
   apiKeys?: Partial<Record<ProviderId, string>>;
   skills?: SkillsSettings;
 }
@@ -21,6 +24,7 @@ const DEFAULT_SETTINGS: Settings = {
   defaultProvider: "free",
   defaultModel: "meta-llama/llama-3.3-70b-instruct:free",
   thinkingLevel: "off",
+  agentMode: "build",
 };
 
 export function loadSettings(): Settings {
@@ -35,6 +39,7 @@ export function loadSettings(): Settings {
       defaultProvider: parsed.defaultProvider ?? DEFAULT_SETTINGS.defaultProvider,
       defaultModel: parsed.defaultModel ?? DEFAULT_SETTINGS.defaultModel,
       thinkingLevel: parsed.thinkingLevel ?? DEFAULT_SETTINGS.thinkingLevel,
+      agentMode: parseAgentMode(parsed.agentMode ?? DEFAULT_SETTINGS.agentMode),
       apiKeys: parsed.apiKeys,
       skills: parsed.skills,
     };
@@ -50,6 +55,12 @@ export function saveSettings(settings: Settings): void {
 
 export function setDefaultModel(settings: Settings, provider: ProviderId, modelId: string): Settings {
   const updated = { ...settings, defaultProvider: provider, defaultModel: modelId };
+  saveSettings(updated);
+  return updated;
+}
+
+export function setAgentMode(settings: Settings, agentMode: AgentMode): Settings {
+  const updated = { ...settings, agentMode };
   saveSettings(updated);
   return updated;
 }

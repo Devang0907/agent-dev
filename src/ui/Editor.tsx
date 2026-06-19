@@ -23,14 +23,18 @@ function wantsNewlineOnEnter(input: string, key: Key): boolean {
   return key.shift || key.meta || input === "\n" || input === "\r\n";
 }
 
+import type { AgentMode } from "../agent/mode.js";
+
 interface EditorProps {
   theme: ThemeColors;
   model: Model;
+  agentMode?: AgentMode;
   skills?: SkillNameOption[];
   contentWidth?: number;
   disabled?: boolean;
   running?: boolean;
   onSuggestionsOpenChange?: (open: boolean) => void;
+  onModeCycle?: (direction: 1 | -1) => void;
   onSubmit: (value: string) => void;
 }
 
@@ -51,11 +55,13 @@ function applySuggestion(suggestion: InputSuggestion, isSkillCmd: boolean): stri
 export function Editor({
   theme,
   model,
+  agentMode = "build",
   skills = [],
   contentWidth = 72,
   disabled,
   running,
   onSuggestionsOpenChange,
+  onModeCycle,
   onSubmit,
 }: EditorProps) {
   const [value, setValue] = useState("");
@@ -238,6 +244,8 @@ export function Editor({
           } else if (pickerOpen) {
             fillSelected(safePickerIndex);
           }
+        } else if (!pickerOpen && onModeCycle) {
+          onModeCycle(key.shift ? -1 : 1);
         }
         return;
       }
@@ -320,7 +328,11 @@ export function Editor({
           )}
         </Box>
         <Text color={theme.textMuted}>
-          agent-dev · <Text color={theme.text}>{modelRef(model)}</Text>
+          <Text color={agentMode === "plan" ? theme.success : theme.warning}>
+            {agentMode === "plan" ? "Plan" : "Build"}
+          </Text>
+          {" · "}
+          <Text color={theme.text}>{modelRef(model)}</Text>
         </Text>
       </Panel>
 
@@ -332,7 +344,7 @@ export function Editor({
           </Text>
         ) : (
           <Text color={theme.textMuted}>
-            Tab completes /commands · ↑↓ pick · Enter send · Shift+Enter newline · Ctrl+J newline · Ctrl+G latest
+            Tab switch mode · Shift+Tab reverse · Enter send · Shift+Enter newline · Ctrl+G latest
           </Text>
         )}
       </Box>

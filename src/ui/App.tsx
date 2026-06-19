@@ -32,7 +32,8 @@ import {
 import { useMouseScroll } from "./useMouseScroll.js";
 import { WHEEL_SCROLL_LINES } from "./mouse.js";
 import { SkillsView } from "./SkillsView.js";
-import { discoverSkills, resolveSkillCommand } from "../agent/skills.js";
+import { discoverSkills } from "../agent/skills.js";
+import type { AgentMode } from "../agent/mode.js";
 import { useAppInput } from "./useAppInput.js";
 import { isModelCommand } from "./slash-commands.js";
 
@@ -96,6 +97,7 @@ export function App({ session, workdir, onQuit }: AppProps) {
   const [pendingModel, setPendingModel] = useState<Model | null>(null);
   const [apiKeyReturnOverlay, setApiKeyReturnOverlay] = useState<Overlay>("none");
   const [settings, setSettings] = useState(session.getSettings());
+  const [agentMode, setAgentMode] = useState<AgentMode>(session.getAgentMode());
   const [model, setModel] = useState(session.getModel());
   const [running, setRunning] = useState(false);
   /** null = follow latest output */
@@ -270,6 +272,10 @@ export function App({ session, workdir, onQuit }: AppProps) {
         case "model_changed":
           setModel(event.model);
           break;
+        case "agent_mode_changed":
+          setAgentMode(event.mode);
+          setSettings(session.getSettings());
+          break;
         case "session_title":
           setSessionListRefresh((v) => v + 1);
           break;
@@ -357,6 +363,14 @@ export function App({ session, workdir, onQuit }: AppProps) {
       }
       if (value === "/settings") {
         setOverlay("settings");
+        return;
+      }
+      if (value === "/build") {
+        session.setAgentMode("build");
+        return;
+      }
+      if (value === "/plan") {
+        session.setAgentMode("plan");
         return;
       }
       if (value === "/skills") {
@@ -518,11 +532,13 @@ export function App({ session, workdir, onQuit }: AppProps) {
           <Editor
             theme={theme}
             model={model}
+            agentMode={agentMode}
             skills={skillOptions}
             contentWidth={contentWidth}
             disabled={running}
             running={running}
             onSuggestionsOpenChange={setSuggestionsOpen}
+            onModeCycle={(direction) => session.cycleAgentMode(direction)}
             onSubmit={handleSubmit}
           />
         </Box>

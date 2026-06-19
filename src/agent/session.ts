@@ -2,10 +2,12 @@ import { EventEmitter } from "node:events";
 import type { ChatMessage, Model } from "../providers/types.js";
 import type { Settings } from "../config/settings.js";
 import { findModel } from "../config/models.js";
-import { setDefaultModel, saveSettings } from "../config/settings.js";
+import { setDefaultModel, saveSettings, setAgentMode } from "../config/settings.js";
 import { getAvailableModels, getDefaultModelForProvider } from "../providers/registry.js";
 import { runAgentLoop, type AgentEvent, type PermissionRequest } from "./loop.js";
 import { resolveSkillCommand } from "./skills.js";
+import type { AgentMode } from "./mode.js";
+import { buildSwitchReminder } from "./mode.js";
 import { SessionManager } from "../session/manager.js";
 import { generateSessionTitle, fallbackTitle } from "../session/title.js";
 
@@ -13,6 +15,7 @@ export type SessionEvent =
   | AgentEvent
   | { type: "user_message"; content: string }
   | { type: "model_changed"; model: Model }
+  | { type: "agent_mode_changed"; mode: AgentMode }
   | { type: "session_title"; title: string }
   | { type: "permission_request"; request: PermissionRequest };
 
@@ -25,6 +28,7 @@ export class AgentSession extends EventEmitter {
   private abortController?: AbortController;
   private running = false;
   private pendingPermission?: (approved: boolean) => void;
+  private lastLoopMode: AgentMode = "build";
 
   constructor(
     settings: Settings,
@@ -45,6 +49,38 @@ export class AgentSession extends EventEmitter {
       (fromSettings && available.some((m) => m.provider === fromSettings.provider && m.id === fromSettings.id)
         ? fromSettings
         : available[0] ?? findModel("free", "meta-llama/llama-3.3-70b-instruct:free")!);
+    this.lastLoopMode = this.settings.agentMode ?? "build";
+  }
+
+  getAgentMode(): AgentMode {
+    return this.settings.agentMode ?? "build";
+  }
+
+  setAgentMode(mode: AgentMode): void {
+    if (this.settings.agentMode === mode) return;
+    this.settings = setAgentMode(this.settings, mode);
+    this.emit("event", { type: "agent_mode_changed", mode } satisfies SessionEvent);
+  }
+
+  cycleAgentMode(direction: 1 | -1 = 1): AgentMode {
+    const modes: AgentMode[] = ["build", "plan"];
+    const current = this.getAgentMode();
+    const idx = modes.indexOf(current);
+    const next = modes[(idx + direction + modes.length) % modes.length]!;
+    this.setAgentMode(next);
+    return next;
+  }
+
+  private modeSwitchNote(): string | undefined {
+    const current = this.getAgentMode();
+    if (this.lastLoopMode === "plan" && current === "build") {
+      return buildSwitchReminder();
+    }
+    return undefined;
+  }
+
+  private finishLoopMode(): void {
+    this.lastLoopMode = this.getAgentMode();
   }
 
   getModel(): Model {
@@ -148,6 +184,8 @@ export class AgentSession extends EventEmitter {
           messages: loopMessages,
           settings: this.settings,
           workdir: this.workdir,
+          agentMode: this.getAgentMode(),
+          modeSwitchNote: this.modeSwitchNote(),
           signal: this.abortController.signal,
           onEvent: (event) => this.emit("event", event),
           onPermissionRequest: (request) => this.requestCommandPermission(request),
@@ -160,6 +198,7 @@ export class AgentSession extends EventEmitter {
           }
         }
       } finally {
+        this.finishLoopMode();
         this.running = false;
         this.abortController = undefined;
         this.sessionManager.saveAsLast();
@@ -187,6 +226,8 @@ export class AgentSession extends EventEmitter {
         messages: [...this.messages],
         settings: this.settings,
         workdir: this.workdir,
+        agentMode: this.getAgentMode(),
+        modeSwitchNote: this.modeSwitchNote(),
         signal: this.abortController.signal,
         onEvent: (event) => this.emit("event", event),
         onPermissionRequest: (request) => this.requestCommandPermission(request),
@@ -199,6 +240,7 @@ export class AgentSession extends EventEmitter {
         }
       }
     } finally {
+      this.finishLoopMode();
       this.running = false;
       this.abortController = undefined;
       this.sessionManager.saveAsLast();
