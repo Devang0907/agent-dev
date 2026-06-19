@@ -55,6 +55,12 @@ export function useAppInput(
     pendingBackspace.current = false;
     const normalizedKey = normalizeKey(key, isBackspace);
 
+    // Shift+Enter on Windows often sends \n without key.shift — always pass line feeds through.
+    if (input === "\n" || input === "\r\n") {
+      handlerRef.current(input, normalizedKey);
+      return;
+    }
+
     // Block mouse/CSI garbage only — never swallow Enter, arrows, etc.
     if (input && isTerminalNoise(input) && !isActionKey(normalizedKey)) return;
     handlerRef.current(input, normalizedKey);

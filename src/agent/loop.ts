@@ -7,10 +7,12 @@ import { streamChat } from "../providers/registry.js";
 import type { ChatMessage, Model, ToolCall } from "../providers/types.js";
 import type { Settings } from "../config/settings.js";
 import { getToolDefinitions, executeTool, needsToolPermission, formatPermissionCommand } from "./tools/index.js";
-import { loadMemorySummary } from "./tools/memory.js";
-import { loadPlanSummary } from "./tools/plan.js";
-import { getPlatformContext } from "./platform.js";
-import { discoverSkills, formatSkillsCatalog, setSkillContext } from "./skills.js";
+import { setSkillContext } from "./skills.js";
+import {
+  buildDefaultSystemPrompt,
+  buildSystemPrompt,
+  systemPromptForModel,
+} from "./system-prompt.js";
 
 export interface PermissionRequest {
   toolCallId: string;
@@ -19,43 +21,10 @@ export interface PermissionRequest {
   command: string;
 }
 
-const MAX_TOOL_ROUNDS = 10;
+const MAX_TOOL_ROUNDS = Number(process.env.AGENT_MAX_TOOL_ROUNDS) || 50;
 const MAX_SAME_TOOL_CALLS = 2;
 
-const TOOL_LIST =
-  "read, write, edit, diff, grep, git, bash, web_search, docs, memory, plan, database, verify, mcp, skill";
-
-const DEFAULT_SYSTEM_PROMPT = `You are a helpful coding assistant with tools: ${TOOL_LIST}.
-Inspect the codebase (grep, read) before making changes. Use diff to preview edits when helpful.
-For multi-step work, create a plan first. Store important facts in memory for future sessions.
-Use docs for library/API documentation; web_search for news and current events.
-Use verify after code changes to run tests when a test script exists.
-Use the skill tool to load specialized workflows when they match the task.
-git write actions, bash, database mutations, and mcp call_tool require user approval.
-When modifying files, call write or edit once with the full content, then reply briefly to confirm.
-Do NOT call the same tool repeatedly with the same arguments. One successful write is enough.
-When calling tools, use the function-calling API with valid JSON arguments only.
-
-${getPlatformContext()}`;
-
-function buildSystemPrompt(workdir: string, settings: Settings, base = DEFAULT_SYSTEM_PROMPT): string {
-  const memory = loadMemorySummary();
-  const plan = loadPlanSummary();
-  const skills = formatSkillsCatalog(discoverSkills(workdir, settings));
-  const extras: string[] = [];
-  if (skills) extras.push(skills);
-  if (memory) extras.push("Stored memories:\n" + memory);
-  if (plan) extras.push("Active plan:\n" + plan);
-  if (extras.length === 0) return base;
-  return `${base}\n\n${extras.join("\n\n")}`;
-}
-
-function systemPromptForModel(model: Model, base = DEFAULT_SYSTEM_PROMPT): string {
-  if (model.provider === "groq") {
-    return `${base}\nFor Groq: never output <function=...> text — use structured tool calls with JSON arguments.`;
-  }
-  return base;
-}
+const DEFAULT_SYSTEM_PROMPT = buildDefaultSystemPrompt();
 
 export type AgentEvent =
   | { type: "message_start"; role: "assistant" }

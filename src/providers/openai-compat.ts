@@ -47,8 +47,14 @@ function stripToolArgWrapper(raw: string): string {
 
 function argsFromFunctionTail(tail: string): string | null {
   const jsonIdx = tail.indexOf("{");
-  if (jsonIdx < 0) return null;
-  return parseToolArguments(tail.slice(jsonIdx));
+  if (jsonIdx >= 0) return parseToolArguments(tail.slice(jsonIdx));
+
+  // Groq/Llama sometimes emit ("query": "value") without braces.
+  let body = stripToolArgWrapper(tail);
+  if (!body.startsWith("{") && body.includes(":")) {
+    body = `{${body}}`;
+  }
+  return parseToolArguments(body);
 }
 
 function parseToolArguments(raw: string): string | null {

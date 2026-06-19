@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { Box, Text } from "ink";
+import type { Key } from "ink";
 import type { ThemeColors } from "./theme.js";
 import type { Model } from "../providers/types.js";
 import { modelRef } from "../config/models.js";
@@ -17,6 +18,10 @@ import { isPrintableTextInput } from "./mouse.js";
 import { useMouseScroll } from "./useMouseScroll.js";
 import { WHEEL_SCROLL_LINES } from "./mouse.js";
 import { clamp, SUGGESTION_PICKER_VISIBLE } from "./scroll.js";
+
+function wantsNewlineOnEnter(input: string, key: Key): boolean {
+  return key.shift || key.meta || input === "\n" || input === "\r\n";
+}
 
 interface EditorProps {
   theme: ThemeColors;
@@ -178,8 +183,13 @@ export function Editor({
         return;
       }
 
+      if (input === "\n" || input === "\r\n" || (key.ctrl && input === "j")) {
+        insertAtCursor("\n");
+        return;
+      }
+
       if (key.return) {
-        if (key.shift) {
+        if (wantsNewlineOnEnter(input, key)) {
           insertAtCursor("\n");
           return;
         }
@@ -318,7 +328,7 @@ export function Editor({
           </Text>
         ) : (
           <Text color={theme.textMuted}>
-            Tab completes /commands · ↑↓ pick · Enter open · Shift+Enter newline · Ctrl+G latest
+            Tab completes /commands · ↑↓ pick · Enter send · Shift+Enter newline · Ctrl+J newline · Ctrl+G latest
           </Text>
         )}
       </Box>
