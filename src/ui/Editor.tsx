@@ -197,13 +197,15 @@ export function Editor({
           const pick = suggestions[safePickerIndex];
           if (pick) {
             if (isSkillPicker) {
-              onSubmit(pick.cmd);
-            } else if (pick.cmd === "/skill") {
+              const next = applySuggestion(pick, true);
+              setValueAndCursor(next, next.length);
+              return;
+            }
+            if (pick.cmd === "/skill") {
               setValueAndCursor("/skill ", "/skill ".length);
               return;
-            } else {
-              onSubmit(pick.cmd);
             }
+            onSubmit(pick.cmd);
             setValue("");
             setCursorPos(0);
             setSuggestions([]);
@@ -294,7 +296,9 @@ export function Editor({
             })}
           </Box>
           <Text color={theme.textMuted}>
-            ↑↓ select · Enter open · Tab fill
+            {isSkillPicker
+              ? "↑↓ select · Enter fill · Tab fill · add prompt then Enter send"
+              : "↑↓ select · Enter open · Tab fill"}
             {suggestions.length > 1 ? ` · ${safePickerIndex + 1}/${suggestions.length}` : ""}
           </Text>
         </Box>
