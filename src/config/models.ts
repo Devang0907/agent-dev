@@ -1,4 +1,5 @@
 import type { Model, ProviderId } from "../providers/types.js";
+import { MODELS as FREE_MODELS, resolveFreeModelId } from "../providers/openrouter-free.js";
 
 export const PROVIDER_LABELS: Record<ProviderId, string> = {
   openai: "OpenAI (ChatGPT)",
@@ -14,25 +15,12 @@ export const ALL_MODELS: Model[] = [
   { provider: "groq", id: "openai/gpt-oss-120b", name: "GPT-OSS 120B" },
   { provider: "gemini", id: "gemini-2.0-flash", name: "Gemini 2.0 Flash" },
   { provider: "gemini", id: "gemini-2.5-flash", name: "Gemini 2.5 Flash" },
-  {
-    provider: "free",
-    id: "meta-llama/llama-3.3-70b-instruct:free",
-    name: "Llama 3.3 70B (free)",
-  },
-  {
-    provider: "free",
-    id: "google/gemini-2.0-flash-exp:free",
-    name: "Gemini 2.0 Flash (free)",
-  },
-  {
-    provider: "free",
-    id: "qwen/qwen-2.5-72b-instruct:free",
-    name: "Qwen 2.5 72B (free)",
-  },
+  ...FREE_MODELS,
 ];
 
 export function findModel(provider: ProviderId, id: string): Model | undefined {
-  return ALL_MODELS.find((m) => m.provider === provider && m.id === id);
+  const resolvedId = provider === "free" ? resolveFreeModelId(id) : id;
+  return ALL_MODELS.find((m) => m.provider === provider && m.id === resolvedId);
 }
 
 export function parseModelRef(ref: string): Model | undefined {

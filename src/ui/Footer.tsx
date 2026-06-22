@@ -35,7 +35,7 @@ export function Footer({ workdir, model, theme, scrollHint, orchestratorMode }: 
         {shortPath(workdir)}
         {"  "}
         {orchestratorMode === "boss" ? (
-          <Text color={theme.warning}>BOSS</Text>
+          <Text color={theme.boss}>BOSS</Text>
         ) : null}
         {orchestratorMode === "boss" ? " · " : null}
         <Text color={theme.text}>{modelRef(model)}</Text>

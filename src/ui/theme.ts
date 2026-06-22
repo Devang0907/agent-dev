@@ -6,6 +6,7 @@ export interface ThemeColors {
   success: string;
   warning: string;
   error: string;
+  boss: string;
   border: string;
   borderActive: string;
 }
@@ -19,6 +20,7 @@ export const theme: ThemeColors = {
   success: "green",
   warning: "yellow",
   error: "red",
+  boss: "magenta",
   border: "gray",
   borderActive: "white",
 };

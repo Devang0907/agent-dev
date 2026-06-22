@@ -4,6 +4,7 @@ import type { ProviderId } from "../providers/types.js";
 import type { ThinkingLevel } from "../providers/types.js";
 import type { AgentMode } from "../agent/mode.js";
 import { parseAgentMode } from "../agent/mode.js";
+import { resolveFreeModelId } from "../providers/openrouter-free.js";
 
 export type OrchestratorMode = "off" | "boss";
 
@@ -38,16 +39,28 @@ export function loadSettings(): Settings {
   try {
     const raw = readFileSync(SETTINGS_PATH, "utf-8");
     const parsed = JSON.parse(raw) as Partial<Settings> & { theme?: string };
-    return {
+    const provider = parsed.defaultProvider ?? DEFAULT_SETTINGS.defaultProvider;
+    let defaultModel = parsed.defaultModel ?? DEFAULT_SETTINGS.defaultModel;
+    let migrated = false;
+    if (provider === "free") {
+      const resolved = resolveFreeModelId(defaultModel);
+      if (resolved !== defaultModel) {
+        defaultModel = resolved;
+        migrated = true;
+      }
+    }
+    const settings: Settings = {
       ...DEFAULT_SETTINGS,
-      defaultProvider: parsed.defaultProvider ?? DEFAULT_SETTINGS.defaultProvider,
-      defaultModel: parsed.defaultModel ?? DEFAULT_SETTINGS.defaultModel,
+      defaultProvider: provider,
+      defaultModel,
       thinkingLevel: parsed.thinkingLevel ?? DEFAULT_SETTINGS.thinkingLevel,
       agentMode: parseAgentMode(parsed.agentMode ?? DEFAULT_SETTINGS.agentMode),
       orchestratorMode: parseOrchestratorMode(parsed.orchestratorMode ?? DEFAULT_SETTINGS.orchestratorMode),
       apiKeys: parsed.apiKeys,
       skills: parsed.skills,
     };
+    if (migrated) saveSettings(settings);
+    return settings;
   } catch {
     return { ...DEFAULT_SETTINGS };
   }

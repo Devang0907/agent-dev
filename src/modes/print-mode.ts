@@ -52,7 +52,8 @@ export async function runPrintMode(session: AgentSession, prompt: string): Promi
   const model = session.getModel();
   const boss = session.getOrchestratorMode() === "boss";
   console.log(
-    chalk.gray(`Model: ${model.provider}/${model.id}${boss ? " · BOSS mode" : ""}`),
+    chalk.gray(`Model: ${model.provider}/${model.id}`) +
+      (boss ? chalk.magenta(" · BOSS mode") : ""),
   );
 
   let activeWorker: { runId: string; workerId: string } | null = null;

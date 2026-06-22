@@ -332,7 +332,7 @@ export function Editor({
         </Box>
         <Text color={theme.textMuted}>
           {orchestratorMode === "boss" ? (
-            <Text color={theme.warning}>Boss</Text>
+            <Text color={theme.boss}>Boss</Text>
           ) : (
             <Text color={agentMode === "plan" ? theme.success : theme.warning}>
               {agentMode === "plan" ? "Plan" : "Build"}
