@@ -36,6 +36,12 @@ export function CommandApprovalPrompt({
         <Text color={theme.text} bold>
           Approve this action?
         </Text>
+        {request.workerId && request.runId ? (
+          <Text color={theme.textMuted}>
+            {" "}
+            Worker {request.workerId} #{request.runId}
+          </Text>
+        ) : null}
         <Text color={theme.textMuted}> y approve · n or Esc deny</Text>
 
         <Box

@@ -1,6 +1,7 @@
 export interface CliArgs {
   print: boolean;
   continueSession: boolean;
+  boss: boolean;
   model?: string;
   prompt?: string;
   help: boolean;
@@ -11,6 +12,7 @@ export function parseArgs(argv: string[]): CliArgs {
   const result: CliArgs = {
     print: false,
     continueSession: false,
+    boss: false,
     help: false,
   };
 
@@ -24,6 +26,8 @@ export function parseArgs(argv: string[]): CliArgs {
       result.print = true;
     } else if (arg === "-c" || arg === "--continue") {
       result.continueSession = true;
+    } else if (arg === "--boss") {
+      result.boss = true;
     } else if (arg === "--model" && args[i + 1]) {
       result.model = args[++i];
     } else if (!arg.startsWith("-")) {
@@ -45,6 +49,8 @@ agent-dev — minimal pi-like coding agent
 Usage:
   agent                          Interactive mode
   agent -p "prompt"              Print mode (no TUI)
+  agent --boss                     Start in boss orchestrator mode
+  agent --boss -p "prompt"         Boss mode, print and exit
   agent -c                       Continue last session
   agent --model groq/llama-3.3-70b-versatile "prompt"
 
@@ -54,6 +60,7 @@ Usage:
 Options:
   -p, --print          Print response and exit
   -c, --continue       Continue most recent session
+  --boss               Enable boss orchestrator mode
   --model <ref>        Provider/model (e.g. openai/gpt-4o)
   -h, --help           Show help
 

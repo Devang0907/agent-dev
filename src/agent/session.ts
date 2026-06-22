@@ -2,12 +2,19 @@ import { EventEmitter } from "node:events";
 import type { ChatMessage, Model } from "../providers/types.js";
 import type { Settings } from "../config/settings.js";
 import { findModel } from "../config/models.js";
-import { setDefaultModel, saveSettings, setAgentMode } from "../config/settings.js";
+import { setDefaultModel, saveSettings, setAgentMode, setOrchestratorMode } from "../config/settings.js";
+import type { OrchestratorMode } from "../config/settings.js";
 import { getAvailableModels, getDefaultModelForProvider } from "../providers/registry.js";
 import { runAgentLoop, type AgentEvent, type PermissionRequest } from "./loop.js";
 import { resolveSkillCommand } from "./skills.js";
 import type { AgentMode } from "./mode.js";
 import { buildSwitchReminder } from "./mode.js";
+import { buildBossSystemPrompt } from "./orchestrator/boss-prompt.js";
+import { BOSS_TOOL_NAMES } from "./orchestrator/workers.js";
+import {
+  setDelegationContext,
+  MAX_DELEGATIONS_PER_TURN,
+} from "./orchestrator/context.js";
 import { SessionManager } from "../session/manager.js";
 import { generateSessionTitle, fallbackTitle } from "../session/title.js";
 
@@ -16,6 +23,7 @@ export type SessionEvent =
   | { type: "user_message"; content: string }
   | { type: "model_changed"; model: Model }
   | { type: "agent_mode_changed"; mode: AgentMode }
+  | { type: "orchestrator_mode_changed"; mode: OrchestratorMode }
   | { type: "session_title"; title: string }
   | { type: "permission_request"; request: PermissionRequest };
 
@@ -69,6 +77,62 @@ export class AgentSession extends EventEmitter {
     const next = modes[(idx + direction + modes.length) % modes.length]!;
     this.setAgentMode(next);
     return next;
+  }
+
+  getOrchestratorMode(): OrchestratorMode {
+    return this.settings.orchestratorMode ?? "off";
+  }
+
+  setOrchestratorMode(mode: OrchestratorMode): void {
+    if (this.settings.orchestratorMode === mode) return;
+    this.settings = setOrchestratorMode(this.settings, mode);
+    this.emit("event", { type: "orchestrator_mode_changed", mode } satisfies SessionEvent);
+  }
+
+  toggleOrchestratorMode(): OrchestratorMode {
+    const next = this.getOrchestratorMode() === "boss" ? "off" : "boss";
+    this.setOrchestratorMode(next);
+    return next;
+  }
+
+  private isBossMode(): boolean {
+    return this.getOrchestratorMode() === "boss";
+  }
+
+  private async runLoop(messages: ChatMessage[]): Promise<ChatMessage[]> {
+    const isBoss = this.isBossMode();
+
+    if (isBoss) {
+      setDelegationContext({
+        sessionId: this.getSessionId(),
+        model: this.model,
+        settings: this.settings,
+        workdir: this.workdir,
+        signal: this.abortController?.signal,
+        onEvent: (event) => this.emit("event", event),
+        onPermissionRequest: (request) => this.requestCommandPermission(request),
+        delegationCount: 0,
+        maxDelegations: MAX_DELEGATIONS_PER_TURN,
+      });
+    }
+
+    try {
+      return await runAgentLoop({
+        model: this.model,
+        messages,
+        settings: this.settings,
+        workdir: this.workdir,
+        agentMode: isBoss ? "build" : this.getAgentMode(),
+        modeSwitchNote: isBoss ? undefined : this.modeSwitchNote(),
+        systemPrompt: isBoss ? buildBossSystemPrompt() : undefined,
+        allowedTools: isBoss ? [...BOSS_TOOL_NAMES] : undefined,
+        signal: this.abortController?.signal,
+        onEvent: (event) => this.emit("event", event),
+        onPermissionRequest: (request) => this.requestCommandPermission(request),
+      });
+    } finally {
+      if (isBoss) setDelegationContext(null);
+    }
   }
 
   private modeSwitchNote(): string | undefined {
@@ -179,17 +243,7 @@ export class AgentSession extends EventEmitter {
 
       try {
         const loopMessages = [...this.messages.slice(0, -1), { role: "user" as const, content: agentContent }];
-        const newMessages = await runAgentLoop({
-          model: this.model,
-          messages: loopMessages,
-          settings: this.settings,
-          workdir: this.workdir,
-          agentMode: this.getAgentMode(),
-          modeSwitchNote: this.modeSwitchNote(),
-          signal: this.abortController.signal,
-          onEvent: (event) => this.emit("event", event),
-          onPermissionRequest: (request) => this.requestCommandPermission(request),
-        });
+        const newMessages = await this.runLoop(loopMessages);
 
         for (const msg of newMessages) {
           if (msg.role !== "user") {
@@ -221,17 +275,7 @@ export class AgentSession extends EventEmitter {
     this.abortController = new AbortController();
 
     try {
-      const newMessages = await runAgentLoop({
-        model: this.model,
-        messages: [...this.messages],
-        settings: this.settings,
-        workdir: this.workdir,
-        agentMode: this.getAgentMode(),
-        modeSwitchNote: this.modeSwitchNote(),
-        signal: this.abortController.signal,
-        onEvent: (event) => this.emit("event", event),
-        onPermissionRequest: (request) => this.requestCommandPermission(request),
-      });
+      const newMessages = await this.runLoop([...this.messages]);
 
       for (const msg of newMessages) {
         if (msg.role !== "user") {

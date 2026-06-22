@@ -1,6 +1,6 @@
 import { render } from "ink";
 import React from "react";
-import { loadSettings } from "./config/settings.js";
+import { loadSettings, setOrchestratorMode } from "./config/settings.js";
 import { SessionManager } from "./session/manager.js";
 import { AgentSession } from "./agent/session.js";
 import { parseArgs, printHelp } from "./cli/args.js";
@@ -21,7 +21,9 @@ export async function main(): Promise<void> {
     return;
   }
 
-  const settings = loadSettings();
+  const settings = args.boss
+    ? setOrchestratorMode(loadSettings(), "boss")
+    : loadSettings();
   const workdir = process.cwd();
 
   let sessionManager: SessionManager;

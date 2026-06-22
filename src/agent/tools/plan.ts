@@ -9,6 +9,9 @@ export interface PlanTask {
   id: string;
   content: string;
   status: TaskStatus;
+  assignee?: string;
+  parentId?: string;
+  runId?: string;
 }
 
 interface PlanStore {
@@ -20,7 +23,7 @@ interface PlanStore {
 export const planTool: ToolDefinition = {
   name: "plan",
   description:
-    "Create and track a task plan for multi-step work. Persists to ~/.agent-dev/plan.json. Use at the start of complex tasks.",
+    "Create and track a task plan for multi-step work. Persists to ~/.agent-dev/plan.json. Use at the start of complex tasks. Supports assignee, parent_id, and run_id for hierarchical boss orchestration.",
   parameters: {
     type: "object",
     properties: {
@@ -31,7 +34,17 @@ export const planTool: ToolDefinition = {
       title: { type: "string", description: "Plan title (for create)" },
       tasks: {
         type: "array",
-        description: "Task strings (for create) or task updates",
+        description: "Task strings (for create)",
+        items: { type: "string" },
+      },
+      assignees: {
+        type: "array",
+        description: "Worker ids parallel to tasks (for create)",
+        items: { type: "string" },
+      },
+      parent_ids: {
+        type: "array",
+        description: "Parent task ids parallel to tasks (for create)",
         items: { type: "string" },
       },
       task_id: { type: "string", description: "Task id for update/complete" },
@@ -39,6 +52,9 @@ export const planTool: ToolDefinition = {
         type: "string",
         description: "pending | in_progress | completed (for update)",
       },
+      assignee: { type: "string", description: "Worker id assigned to task (for update/create)" },
+      parent_id: { type: "string", description: "Parent task id (for update)" },
+      run_id: { type: "string", description: "Delegation run id linked to task (for update)" },
     },
     required: ["action"],
     additionalProperties: false,
@@ -69,7 +85,12 @@ function formatPlan(plan: PlanStore): string {
   for (const t of plan.tasks) {
     const mark =
       t.status === "completed" ? "✓" : t.status === "in_progress" ? "→" : "○";
-    lines.push(`${mark} [${t.id}] ${t.content}`);
+    const meta: string[] = [];
+    if (t.assignee) meta.push(t.assignee);
+    if (t.parentId) meta.push(`parent:${t.parentId}`);
+    if (t.runId) meta.push(`run:${t.runId}`);
+    const suffix = meta.length > 0 ? ` (${meta.join(", ")})` : "";
+    lines.push(`${mark} [${t.id}] ${t.content}${suffix}`);
   }
   return lines.join("\n");
 }
@@ -78,8 +99,13 @@ export async function executePlan(args: {
   action: string;
   title?: string;
   tasks?: string[];
+  assignees?: string[];
+  parent_ids?: string[];
   task_id?: string;
   status?: string;
+  assignee?: string;
+  parent_id?: string;
+  run_id?: string;
 }): Promise<string> {
   const action = args.action?.trim().toLowerCase();
   if (!action) return "Error: action is required";
@@ -92,12 +118,16 @@ export async function executePlan(args: {
   if (action === "create") {
     const tasks = (args.tasks ?? []).filter((t) => t.trim());
     if (tasks.length === 0) return "Error: tasks array is required for create";
+    const assignees = args.assignees ?? [];
+    const parentIds = args.parent_ids ?? [];
     const plan: PlanStore = {
       title: args.title?.trim(),
       tasks: tasks.map((content, i) => ({
         id: String(i + 1),
         content: content.trim(),
         status: i === 0 ? "in_progress" : "pending",
+        assignee: assignees[i]?.trim() || undefined,
+        parentId: parentIds[i]?.trim() || undefined,
       })),
       updatedAt: new Date().toISOString(),
     };
@@ -137,6 +167,9 @@ export async function executePlan(args: {
       }
       task.status = status;
     }
+    if (args.assignee?.trim()) task.assignee = args.assignee.trim();
+    if (args.parent_id?.trim()) task.parentId = args.parent_id.trim();
+    if (args.run_id?.trim()) task.runId = args.run_id.trim();
     plan.updatedAt = new Date().toISOString();
     savePlan(plan);
     return `Task ${taskId} updated.\n${formatPlan(plan)}`;

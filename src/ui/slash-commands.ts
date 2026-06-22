@@ -3,6 +3,8 @@ export const SLASH_COMMANDS = [
   { cmd: "/settings", desc: "Thinking level & API keys" },
   { cmd: "/build", desc: "Switch to Build mode (full tool access)" },
   { cmd: "/plan", desc: "Switch to Plan mode (read-only exploration)" },
+  { cmd: "/boss", desc: "Toggle boss orchestrator mode" },
+  { cmd: "/trace", desc: "Show latest worker trace log path" },
   { cmd: "/tasks", desc: "Show the active task plan" },
   { cmd: "/skills", desc: "Browse and install Vercel skills" },
   { cmd: "/skill", desc: "Load a skill for one turn" },

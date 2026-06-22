@@ -35,9 +35,11 @@ import { SkillsView } from "./SkillsView.js";
 import { discoverSkills } from "../agent/skills.js";
 import { loadPlanSummary } from "../agent/tools/plan.js";
 import type { AgentMode } from "../agent/mode.js";
+import type { OrchestratorMode } from "../config/settings.js";
 import { useAppInput } from "./useAppInput.js";
 import { isModelCommand } from "./slash-commands.js";
 import { sanitizeErrorForUser } from "../providers/openai-compat.js";
+import { getLatestTracePath } from "../agent/orchestrator/trace.js";
 
 let nextMessageId = 0;
 
@@ -100,6 +102,9 @@ export function App({ session, workdir, onQuit }: AppProps) {
   const [apiKeyReturnOverlay, setApiKeyReturnOverlay] = useState<Overlay>("none");
   const [settings, setSettings] = useState(session.getSettings());
   const [agentMode, setAgentMode] = useState<AgentMode>(session.getAgentMode());
+  const [orchestratorMode, setOrchestratorMode] = useState<OrchestratorMode>(
+    session.getOrchestratorMode(),
+  );
   const [model, setModel] = useState(session.getModel());
   const [running, setRunning] = useState(false);
   /** null = follow latest output */
@@ -239,6 +244,54 @@ export function App({ session, workdir, onQuit }: AppProps) {
             toDisplayMessage("tool", formatToolForDisplay(event.name, event.result), event.name),
           ]);
           break;
+        case "delegation_start":
+          setDisplayMessages((prev) => [
+            ...prev,
+            toDisplayMessage(
+              "tool",
+              `▶ ${event.workerId} #${event.runId}\n${event.task}`,
+              `worker:${event.workerId}`,
+            ),
+          ]);
+          break;
+        case "delegation_end": {
+          const badge =
+            event.status === "success" ? "✓" : event.status === "error" ? "✗" : "⊘";
+          const summary =
+            event.summary.length > 600 ? event.summary.slice(0, 600) + "…" : event.summary;
+          setDisplayMessages((prev) => [
+            ...prev,
+            toDisplayMessage(
+              "tool",
+              `${badge} ${event.workerId} #${event.runId} (${event.status})\n${summary}`,
+              `worker:${event.workerId}:end`,
+            ),
+          ]);
+          break;
+        }
+        case "agent_event": {
+          const inner = event.event;
+          if (inner.type === "tool_call") {
+            setDisplayMessages((prev) => [
+              ...prev,
+              toDisplayMessage(
+                "tool",
+                `  ↳ ${formatToolForDisplay(inner.toolCall.name, inner.toolCall.arguments)}`,
+                `${event.workerId}:${inner.toolCall.name}`,
+              ),
+            ]);
+          } else if (inner.type === "tool_result") {
+            setDisplayMessages((prev) => [
+              ...prev,
+              toDisplayMessage(
+                "tool",
+                `  ↳ ${formatToolForDisplay(inner.name, inner.result)}`,
+                `${event.workerId}:${inner.name}`,
+              ),
+            ]);
+          }
+          break;
+        }
         case "turn_end":
           const final = streamingRef.current;
           if (final) {
@@ -283,6 +336,10 @@ export function App({ session, workdir, onQuit }: AppProps) {
           break;
         case "agent_mode_changed":
           setAgentMode(event.mode);
+          setSettings(session.getSettings());
+          break;
+        case "orchestrator_mode_changed":
+          setOrchestratorMode(event.mode);
           setSettings(session.getSettings());
           break;
         case "session_title":
@@ -380,6 +437,24 @@ export function App({ session, workdir, onQuit }: AppProps) {
       }
       if (value === "/plan") {
         session.setAgentMode("plan");
+        return;
+      }
+      if (value === "/boss") {
+        session.toggleOrchestratorMode();
+        return;
+      }
+      if (value === "/trace") {
+        const tracePath = getLatestTracePath(session.getSessionId());
+        setDisplayMessages((prev) => [
+          ...prev,
+          toDisplayMessage("user", value),
+          toDisplayMessage(
+            "assistant",
+            tracePath
+              ? `Latest worker trace:\n${tracePath}`
+              : "No worker traces yet. Traces are written when boss mode delegates to workers.",
+          ),
+        ]);
         return;
       }
       if (value === "/tasks") {
@@ -546,7 +621,13 @@ export function App({ session, workdir, onQuit }: AppProps) {
         </Box>
       )}
 
-      <Footer workdir={workdir} model={model} theme={theme} scrollHint={scrollHint} />
+      <Footer
+        workdir={workdir}
+        model={model}
+        theme={theme}
+        scrollHint={scrollHint}
+        orchestratorMode={orchestratorMode}
+      />
 
       {overlay === "none" && (
         <Box flexShrink={0}>
@@ -554,6 +635,7 @@ export function App({ session, workdir, onQuit }: AppProps) {
             theme={theme}
             model={model}
             agentMode={agentMode}
+            orchestratorMode={orchestratorMode}
             skills={skillOptions}
             contentWidth={contentWidth}
             disabled={running}

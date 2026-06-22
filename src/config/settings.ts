@@ -5,6 +5,8 @@ import type { ThinkingLevel } from "../providers/types.js";
 import type { AgentMode } from "../agent/mode.js";
 import { parseAgentMode } from "../agent/mode.js";
 
+export type OrchestratorMode = "off" | "boss";
+
 export interface SkillsSettings {
   enabled?: string[];
   disabled?: string[];
@@ -16,6 +18,7 @@ export interface Settings {
   defaultModel: string;
   thinkingLevel: ThinkingLevel;
   agentMode?: AgentMode;
+  orchestratorMode?: OrchestratorMode;
   apiKeys?: Partial<Record<ProviderId, string>>;
   skills?: SkillsSettings;
 }
@@ -25,6 +28,7 @@ const DEFAULT_SETTINGS: Settings = {
   defaultModel: "meta-llama/llama-3.3-70b-instruct:free",
   thinkingLevel: "off",
   agentMode: "build",
+  orchestratorMode: "off",
 };
 
 export function loadSettings(): Settings {
@@ -40,6 +44,7 @@ export function loadSettings(): Settings {
       defaultModel: parsed.defaultModel ?? DEFAULT_SETTINGS.defaultModel,
       thinkingLevel: parsed.thinkingLevel ?? DEFAULT_SETTINGS.thinkingLevel,
       agentMode: parseAgentMode(parsed.agentMode ?? DEFAULT_SETTINGS.agentMode),
+      orchestratorMode: parseOrchestratorMode(parsed.orchestratorMode ?? DEFAULT_SETTINGS.orchestratorMode),
       apiKeys: parsed.apiKeys,
       skills: parsed.skills,
     };
@@ -61,6 +66,16 @@ export function setDefaultModel(settings: Settings, provider: ProviderId, modelI
 
 export function setAgentMode(settings: Settings, agentMode: AgentMode): Settings {
   const updated = { ...settings, agentMode };
+  saveSettings(updated);
+  return updated;
+}
+
+export function parseOrchestratorMode(value: string | undefined): OrchestratorMode {
+  return value === "boss" ? "boss" : "off";
+}
+
+export function setOrchestratorMode(settings: Settings, orchestratorMode: OrchestratorMode): Settings {
+  const updated = { ...settings, orchestratorMode };
   saveSettings(updated);
   return updated;
 }

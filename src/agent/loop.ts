@@ -21,6 +21,8 @@ export interface PermissionRequest {
   name: string;
   args: Record<string, unknown>;
   command: string;
+  workerId?: string;
+  runId?: string;
 }
 
 const MAX_TOOL_ROUNDS = Number(process.env.AGENT_MAX_TOOL_ROUNDS) || 50;
@@ -28,13 +30,26 @@ const MAX_SAME_TOOL_CALLS = 2;
 
 const DEFAULT_SYSTEM_PROMPT = buildDefaultSystemPrompt();
 
-export type AgentEvent =
+export type CoreAgentEvent =
   | { type: "message_start"; role: "assistant" }
   | { type: "text_delta"; delta: string }
   | { type: "tool_call"; toolCall: ToolCall }
   | { type: "tool_result"; toolCallId: string; name: string; result: string }
   | { type: "turn_end" }
   | { type: "error"; message: string };
+
+export type OrchestratorEvent =
+  | { type: "delegation_start"; runId: string; workerId: string; task: string }
+  | {
+      type: "delegation_end";
+      runId: string;
+      workerId: string;
+      status: "success" | "error" | "aborted";
+      summary: string;
+    }
+  | { type: "agent_event"; runId: string; workerId: string; event: CoreAgentEvent };
+
+export type AgentEvent = CoreAgentEvent | OrchestratorEvent;
 
 export interface AgentLoopOptions {
   model: Model;
@@ -44,6 +59,7 @@ export interface AgentLoopOptions {
   agentMode?: AgentMode;
   modeSwitchNote?: string;
   systemPrompt?: string;
+  allowedTools?: string[];
   signal?: AbortSignal;
   onEvent: (event: AgentEvent) => void;
   onPermissionRequest?: (request: PermissionRequest) => Promise<boolean>;
@@ -173,10 +189,11 @@ async function collectStream(
   settings: Settings,
   systemPrompt: string,
   agentMode: AgentMode,
+  allowedTools?: string[],
   signal?: AbortSignal,
   onEvent?: (event: AgentEvent) => void,
 ): Promise<{ content: string; toolCalls: ToolCall[]; error?: string }> {
-  const tools = getToolDefinitions(agentMode);
+  const tools = getToolDefinitions(agentMode, allowedTools);
   let content = "";
   const toolCallMap: Map<number, ToolCall> = new Map();
 
@@ -235,6 +252,7 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<ChatMessa
     agentMode = settings.agentMode ?? "build",
     modeSwitchNote,
     systemPrompt = DEFAULT_SYSTEM_PROMPT,
+    allowedTools,
     signal,
     onEvent,
     onPermissionRequest,
@@ -271,6 +289,7 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<ChatMessa
       settings,
       effectivePrompt,
       agentMode,
+      allowedTools,
       signal,
       onEvent,
     );

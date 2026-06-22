@@ -24,11 +24,13 @@ function wantsNewlineOnEnter(input: string, key: Key): boolean {
 }
 
 import type { AgentMode } from "../agent/mode.js";
+import type { OrchestratorMode } from "../config/settings.js";
 
 interface EditorProps {
   theme: ThemeColors;
   model: Model;
   agentMode?: AgentMode;
+  orchestratorMode?: OrchestratorMode;
   skills?: SkillNameOption[];
   contentWidth?: number;
   disabled?: boolean;
@@ -56,6 +58,7 @@ export function Editor({
   theme,
   model,
   agentMode = "build",
+  orchestratorMode = "off",
   skills = [],
   contentWidth = 72,
   disabled,
@@ -328,9 +331,13 @@ export function Editor({
           )}
         </Box>
         <Text color={theme.textMuted}>
-          <Text color={agentMode === "plan" ? theme.success : theme.warning}>
-            {agentMode === "plan" ? "Plan" : "Build"}
-          </Text>
+          {orchestratorMode === "boss" ? (
+            <Text color={theme.warning}>Boss</Text>
+          ) : (
+            <Text color={agentMode === "plan" ? theme.success : theme.warning}>
+              {agentMode === "plan" ? "Plan" : "Build"}
+            </Text>
+          )}
           {" · "}
           <Text color={theme.text}>{modelRef(model)}</Text>
         </Text>

@@ -2,6 +2,7 @@ import React from "react";
 import { Box, Text } from "ink";
 import type { Model } from "../providers/types.js";
 import type { ThemeColors } from "./theme.js";
+import type { OrchestratorMode } from "../config/settings.js";
 import { modelRef } from "../config/models.js";
 
 interface FooterProps {
@@ -9,6 +10,7 @@ interface FooterProps {
   model: Model;
   theme: ThemeColors;
   scrollHint?: string;
+  orchestratorMode?: OrchestratorMode;
 }
 
 function shortPath(path: string, max = 56): string {
@@ -16,7 +18,7 @@ function shortPath(path: string, max = 56): string {
   return "…" + path.slice(-(max - 1));
 }
 
-export function Footer({ workdir, model, theme, scrollHint }: FooterProps) {
+export function Footer({ workdir, model, theme, scrollHint, orchestratorMode }: FooterProps) {
   return (
     <Box
       borderStyle="single"
@@ -28,10 +30,14 @@ export function Footer({ workdir, model, theme, scrollHint }: FooterProps) {
       marginBottom={1}
       flexShrink={0}
     >
-      <Text color={theme.textMuted}>
+        <Text color={theme.textMuted}>
         <Text color={theme.primary}>⌂ </Text>
         {shortPath(workdir)}
         {"  "}
+        {orchestratorMode === "boss" ? (
+          <Text color={theme.warning}>BOSS</Text>
+        ) : null}
+        {orchestratorMode === "boss" ? " · " : null}
         <Text color={theme.text}>{modelRef(model)}</Text>
         {scrollHint && (
           <>
