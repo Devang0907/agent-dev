@@ -1,12 +1,23 @@
 # agent-dev
 
-A minimal pi-like terminal coding agent with an Ink UI. Chat with an AI that can search, edit, and verify code, run git/shell commands (with approval), and more.
+A minimal terminal coding agent with an Ink TUI. Chat with an AI that can read and edit code, search the web, run git/shell commands (with approval), use MCP servers, load skills, and optionally delegate work through a **boss orchestrator** that coordinates specialized worker agents.
 
 ## Quick start
 
+**From source:**
+
 ```bash
+git clone https://github.com/Devang0907/agent-dev.git
+cd agent-dev
 npm install
 npm run dev
+```
+
+**Global install (npm):**
+
+```bash
+npm install -g @devang0907/agent-dev
+agent
 ```
 
 Set at least one API key:
@@ -18,30 +29,89 @@ export GROQ_API_KEY=gsk_...           # Groq
 export GEMINI_API_KEY=...             # Google Gemini
 ```
 
+Requires **Node.js 20+**.
+
 ## Providers
 
 | Provider | Env var | Example models |
 |----------|---------|----------------|
 | OpenAI (ChatGPT) | `OPENAI_API_KEY` | `gpt-4o`, `gpt-4o-mini` |
-| Groq | `GROQ_API_KEY` | `llama-3.3-70b-versatile` |
-| Google Gemini | `GEMINI_API_KEY` or `GOOGLE_API_KEY` | `gemini-2.0-flash` |
-| Free (OpenRouter) | `OPENROUTER_API_KEY` | `meta-llama/llama-3.3-70b-instruct:free` |
+| Groq | `GROQ_API_KEY` | `llama-3.3-70b-versatile`, `openai/gpt-oss-120b` |
+| Google Gemini | `GEMINI_API_KEY` or `GOOGLE_API_KEY` | `gemini-2.0-flash`, `gemini-2.5-flash` |
+| Free (OpenRouter) | `OPENROUTER_API_KEY` | See [free models](#free-models-openrouter) below |
+
+Model refs use `provider/model-id`, e.g. `groq/llama-3.3-70b-versatile` or `free/deepseek/deepseek-r1:free`.
+
+### Free models (OpenRouter)
+
+Free models use the `:free` suffix on OpenRouter. Availability changes over time; agent-dev migrates retired slugs and retries fallbacks automatically.
+
+| Model | Slug |
+|-------|------|
+| Llama 3.3 70B (free) | `meta-llama/llama-3.3-70b-instruct:free` |
+| DeepSeek R1 (free) | `deepseek/deepseek-r1:free` |
+| Qwen3 235B (free) | `qwen/qwen3-235b-a22b:free` |
+| Gemma 3 27B (free) | `google/gemma-3-27b-it:free` |
+| Free auto | `openrouter/free` — picks any available free model (most reliable) |
+
+Default provider/model: `free/meta-llama/llama-3.3-70b-instruct:free`.
+
+## CLI
+
+```bash
+npm run dev                                    # Interactive TUI
+npm run dev -- -p "List files in src"          # Print mode (no TUI)
+npm run dev -- --boss                          # Start in boss orchestrator mode
+npm run dev -- --boss -p "refactor auth module" # Boss mode, print and exit
+npm run dev -- -c                              # Continue last session
+npm run dev -- --model groq/llama-3.3-70b-versatile "hello"
+npm run build && npm start                     # Production build
+```
+
+| Flag | Description |
+|------|-------------|
+| `-p`, `--print` | Print response and exit |
+| `-c`, `--continue` | Resume the most recent session |
+| `--boss` | Enable boss orchestrator mode |
+| `--model <ref>` | Provider/model (e.g. `openai/gpt-4o`) |
+| `-h`, `--help` | Show help |
+
+**Skills subcommand:**
+
+```bash
+agent skills add vercel-labs/agent-skills
+agent skills add vercel-labs/agent-skills -g    # global
+agent skills find react
+agent skills list
+```
 
 ## Interactive commands
 
 | Command | Description |
 |---------|-------------|
-| `/model` | Open model selector (grouped by provider) |
-| `/model groq` | Open selector filtered by search |
+| `/model`, `/m [search]` | Open model selector (grouped by provider) |
 | `/build` | Switch to Build mode (full tool access) |
 | `/plan` | Switch to Plan mode (read-only exploration) |
-| `/settings` | Thinking level, theme, API key status |
+| `/boss` | Toggle boss orchestrator mode |
+| `/tasks` | Show the active task plan |
+| `/trace` | Show path to the latest worker trace log |
+| `/sessions` | Browse and load saved chat sessions |
+| `/settings` | Thinking level and API key status |
 | `/skills` | Browse and install skills (Vercel CLI) |
 | `/skill <name>` | Load a skill for the current turn |
-| `/new` | Clear session |
+| `/new` | Start a new session |
 | `/quit` | Exit |
 
+**Keyboard shortcuts:**
+
+- **Tab** / **Shift+Tab** — cycle Build ↔ Plan when input is empty
+- **Esc** — abort a running turn
+- **Ctrl+G** — scroll chat to latest
+- **Ctrl+U** / **Ctrl+D** — scroll chat up/down
+
 ## Agent modes
+
+### Build and Plan
 
 Switch between **Build** and **Plan** mode like OpenCode:
 
@@ -50,26 +120,38 @@ Switch between **Build** and **Plan** mode like OpenCode:
 | **Build** (default) | Tab / `/build` | Full tool access — edit files, run shell, verify |
 | **Plan** | Tab / `/plan` | Read-only — explore code, research, write plans to `.agent-dev/plans/*.md` |
 
-- **Tab** cycles mode when the input is empty (Shift+Tab reverses)
 - Current mode is shown in the prompt footer (`Build` or `Plan`)
 - Plan mode blocks write/edit/bash/verify/database/MCP; git write actions are denied
 - Switch Plan → Build before implementing; the agent gets a reminder to execute the plan
 
-## CLI
+### Boss orchestrator (opt-in)
 
-```bash
-npm run dev                          # Interactive
-npm run dev -- -p "List files"       # Print mode
-npm run dev -- -c                    # Continue last session
-npm run dev -- --model groq/llama-3.3-70b-versatile "hello"
-npm run build && npm start
+Boss mode adds a **hierarchical orchestrator** on top of the normal agent loop. The boss plans work, delegates to specialized workers sequentially, monitors their progress, and synthesizes a final answer.
+
+Enable with `--boss` or `/boss`. The footer shows **BOSS** in purple when active.
+
+```
+User → Boss (plan + delegate)
+         ├─ explore worker   (read-only research)
+         ├─ implement worker (code changes)
+         ├─ shell worker     (commands & tests)
+         └─ plan worker      (architecture docs)
 ```
 
-Config and sessions are stored in `~/.agent-dev/`.
+| Worker | Role | Tools |
+|--------|------|-------|
+| `explore` | Read-only codebase research | read, grep, git, docs |
+| `implement` | Focused code changes | read, write, edit, diff, grep, verify |
+| `shell` | Commands and tests | bash, exec, verify |
+| `plan` | Planning documents | plan, read, grep |
+
+The boss only has `plan` and `delegate` tools — it does not edit files or run shell commands directly. Worker activity is streamed in the TUI and logged to `~/.agent-dev/traces/<sessionId>/<runId>.jsonl`. Use `/trace` to find the latest log.
+
+Boss mode uses the same model you select in `/model`. Workers run in isolated contexts with scoped task briefs.
 
 ## Tools
 
-The agent has fifteen built-in tools:
+The agent has **17 built-in tools** (`delegate` is boss-only; 16 are available in normal mode):
 
 | Tool | Description |
 |------|-------------|
@@ -80,16 +162,18 @@ The agent has fifteen built-in tools:
 | `grep` | Search codebase (ripgrep; on Windows uses **findstr**, then PowerShell) |
 | `git` | Git status, diff, log, commit, etc. (writes need approval) |
 | `bash` | Run a shell command — **requires approval** |
+| `exec` | Structured shell command (`cmd` array) — **requires approval** |
 | `web_search` | Search the internet (DuckDuckGo / Google News) |
 | `docs` | Look up npm READMEs, MDN, or fetch a docs URL |
 | `memory` | Store/recall long-term facts in `~/.agent-dev/memory.json` |
-| `plan` | Create and track multi-step task plans |
+| `plan` | Create and track multi-step task plans (supports assignee, parent task, run id) |
+| `delegate` | **Boss only** — spawn a worker agent for a focused subtask |
 | `database` | Run SQL on SQLite files (mutations need approval) |
 | `verify` | Auto-run tests/build from `package.json` scripts |
 | `mcp` | Call tools from MCP servers (see below) |
-| `skill` | Load a skill by name from available_skills |
+| `skill` | Load a skill by name from `available_skills` |
 
-File operations are restricted to the current working directory. Shell commands, git writes, SQL mutations, and MCP tool calls prompt for approval (`y` / `n`).
+File operations are restricted to the current working directory. Shell commands, git writes, SQL mutations, and MCP tool calls prompt for approval (`y` / `n`). In boss mode, approval prompts show which worker requested the action.
 
 ### MCP configuration
 
@@ -151,6 +235,64 @@ Filter skills in `~/.agent-dev/settings.json`:
     "paths": ["~/team-skills"]
   }
 }
+```
+
+## Configuration
+
+All config lives under `~/.agent-dev/` (override with `AGENT_DEV_DIR`):
+
+| Path | Purpose |
+|------|---------|
+| `settings.json` | Default provider/model, thinking level, agent mode, orchestrator mode, API keys, skills |
+| `sessions/*.jsonl` | Chat history (one file per session) |
+| `last-session.json` | Pointer to resume with `-c` |
+| `memory.json` | Cross-session memory |
+| `plan.json` | Active task plan |
+| `mcp.json` | MCP server definitions |
+| `traces/<sessionId>/` | Boss worker trace logs (JSONL) |
+
+Example `settings.json`:
+
+```json
+{
+  "defaultProvider": "free",
+  "defaultModel": "meta-llama/llama-3.3-70b-instruct:free",
+  "thinkingLevel": "off",
+  "agentMode": "build",
+  "orchestratorMode": "off"
+}
+```
+
+Set `orchestratorMode` to `"boss"` to enable boss mode by default.
+
+### Environment variables
+
+| Variable | Description |
+|----------|-------------|
+| `OPENROUTER_API_KEY` | OpenRouter (free tier models) |
+| `OPENAI_API_KEY` | OpenAI |
+| `GROQ_API_KEY` | Groq |
+| `GEMINI_API_KEY` / `GOOGLE_API_KEY` | Google Gemini |
+| `AGENT_DEV_DIR` | Config directory (default `~/.agent-dev`) |
+| `AGENT_MAX_TOOL_ROUNDS` | Max tool-call rounds per turn (default `50`) |
+| `AGENT_MAX_DELEGATIONS` | Max worker delegations per boss turn (default `10`) |
+
+## Architecture
+
+agent-dev is a single-agent **ReAct loop** — no LangGraph or external agent framework. The core loop streams an LLM response, executes tool calls, and repeats until done.
+
+Boss mode nests additional `runAgentLoop` instances inside the `delegate` tool, following the [orchestrator-workers](https://www.anthropic.com/engineering/building-effective-agents) pattern: the boss dynamically decomposes tasks and delegates to workers with isolated context.
+
+```
+src/
+├── agent/
+│   ├── loop.ts              # Core ReAct loop
+│   ├── session.ts           # Session state, events, boss routing
+│   ├── orchestrator/        # Boss prompt, workers, traces
+│   └── tools/               # Built-in tool implementations
+├── providers/               # OpenAI, Groq, Gemini, OpenRouter
+├── ui/                      # Ink TUI
+└── modes/print-mode.ts      # Headless / CI output
 ```
 
 ## License

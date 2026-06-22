@@ -1,6 +1,6 @@
 {
   "name": "@devang0907/agent-dev",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "Minimal terminal coding agent",
   "type": "module",
   "license": "MIT",
