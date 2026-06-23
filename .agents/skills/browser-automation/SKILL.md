@@ -10,8 +10,8 @@ Use the `browser` tool for web tasks. Follow this loop:
 ## Operating loop
 
 1. **Check tabs** — `listTabs` if unsure which tab is active.
-2. **Inspect first** — call `getPageContent` before clicking unfamiliar pages.
-3. **Act** — `click`, `type`, `select`, `check` using CSS selectors from the page content.
+2. **Inspect first** — call `getPageContent` after every navigation or search submit.
+3. **Search** — `type` with `#twotabsearchtextbox` or `input[name="field-keywords"]` (Enter is pressed automatically). Then `getPageContent` to read the **Listings / search results** section.
 4. **Verify** — `extract` or `getPageContent` after UI changes.
 5. **Resnapshot** — if an action fails, run `getPageContent` again (DOM may have changed).
 

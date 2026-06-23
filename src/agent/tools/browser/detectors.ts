@@ -23,29 +23,31 @@ const DESTRUCTIVE_TEXT_PATTERNS = [
   /\bsubmit\s+payment\b/i,
 ];
 
-const CAPTCHA_PATTERNS = [
-  /recaptcha/i,
-  /hcaptcha/i,
-  /\bcaptcha\b/i,
-  /challenge-form/i,
-  /cf-turnstile/i,
+/** URL paths that indicate a real challenge page — not mere script references in HTML. */
+const CAPTCHA_URL_PATTERNS = [
+  /validatecaptcha/i,
+  /robot_check/i,
+  /\/errors\/validate/i,
+  /are-you-a-human/i,
+  /blocked.*bot/i,
 ];
 
-const OTP_PATTERNS = [
-  /verification\s+code/i,
-  /one[- ]time/i,
-  /\botp\b/i,
-  /\b2fa\b/i,
-  /two[- ]factor/i,
-  /enter\s+the\s+code/i,
+const VISIBLE_CAPTCHA_SELECTORS = [
+  'iframe[src*="recaptcha"]',
+  'iframe[src*="hcaptcha"]',
+  "#captchacharacters",
+  'form[action*="captcha"]',
+  'img[src*="captcha" i]',
+  "#auth-captcha-image",
 ];
 
-const PAYMENT_FIELD_PATTERNS = [
-  /card[-_]?number/i,
-  /cvv/i,
-  /cvc/i,
-  /expir/i,
-  /credit[-_]?card/i,
+const VISIBLE_OTP_SELECTORS = [
+  'input[autocomplete="one-time-code"]',
+  'input[name*="otp" i]',
+  'input[id*="otp" i]',
+  'input[name*="mfa" i]',
+  'input[placeholder*="verification code" i]',
+  'input[placeholder*="one-time" i]',
 ];
 
 export function isDestructiveBrowserAction(args: BrowserToolArgs): boolean {
@@ -79,38 +81,58 @@ export interface PageBlocker {
   reason: string;
 }
 
+async function isVisible(page: Page, selector: string): Promise<boolean> {
+  try {
+    return await page.locator(selector).first().isVisible({ timeout: 500 });
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Detect real blockers using visible UI only.
+ * Avoids false positives from "captcha" strings embedded in Amazon/Google scripts.
+ */
 export async function detectPageBlockers(page: Page): Promise<PageBlocker | null> {
   try {
-    const html = await page.content();
-    const lower = html.toLowerCase();
-
-    if (CAPTCHA_PATTERNS.some((p) => p.test(lower))) {
+    const url = page.url();
+    if (CAPTCHA_URL_PATTERNS.some((p) => p.test(url))) {
       return {
         kind: "captcha",
-        reason: "CAPTCHA detected on page. Complete it in the browser window, then continue.",
+        reason: "CAPTCHA or bot-check page detected. Complete it in the browser window, then press Enter to continue.",
       };
     }
 
-    if (OTP_PATTERNS.some((p) => p.test(lower))) {
-      return {
-        kind: "otp",
-        reason: "OTP or verification code required. Enter it in the browser or provide it when prompted.",
-      };
-    }
-
-    if (PAYMENT_FIELD_PATTERNS.some((p) => p.test(lower))) {
-      const hasCardInput = await page
-        .locator(
-          'input[name*="card" i], input[autocomplete="cc-number"], input[placeholder*="card" i]',
-        )
-        .count()
-        .catch(() => 0);
-      if (hasCardInput > 0) {
+    for (const selector of VISIBLE_CAPTCHA_SELECTORS) {
+      if (await isVisible(page, selector)) {
         return {
-          kind: "payment",
-          reason: "Payment details required. Enter card information manually in the browser — never share card numbers in chat.",
+          kind: "captcha",
+          reason: "CAPTCHA challenge is visible. Complete it in the browser window, then press Enter to continue.",
         };
       }
+    }
+
+    for (const selector of VISIBLE_OTP_SELECTORS) {
+      if (await isVisible(page, selector)) {
+        return {
+          kind: "otp",
+          reason: "OTP or verification code field detected. Enter it in the browser or provide it when prompted.",
+        };
+      }
+    }
+
+    const hasCardInput = await page
+      .locator(
+        'input[name*="card" i]:visible, input[autocomplete="cc-number"]:visible, input[placeholder*="card number" i]:visible',
+      )
+      .count()
+      .catch(() => 0);
+    if (hasCardInput > 0) {
+      return {
+        kind: "payment",
+        reason:
+          "Payment form is visible. Enter card details manually in the browser — never share card numbers in chat.",
+      };
     }
   } catch {
     // ignore detection errors

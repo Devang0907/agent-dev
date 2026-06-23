@@ -1,10 +1,16 @@
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
-import type { Browser, BrowserContext, Page } from "playwright";
+import type { BrowserContext, Page } from "playwright";
 import { chromium } from "playwright";
 import { BROWSER_PROFILES_DIR } from "../../../config/paths.js";
 import type { BrowserSettings, TabInfo } from "./types.js";
 import { formatBrowserError } from "./errors.js";
+
+const STEALTH_INIT_SCRIPT = `
+Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+`;
 
 interface TabEntry {
   page: Page;
@@ -13,7 +19,6 @@ interface TabEntry {
 }
 
 export class BrowserSession {
-  private browser: Browser | null = null;
   private context: BrowserContext | null = null;
   private tabs = new Map<string, TabEntry>();
   private nextTabNum = 1;
@@ -28,7 +33,7 @@ export class BrowserSession {
   }
 
   get isOpen(): boolean {
-    return this.browser !== null;
+    return this.context !== null;
   }
 
   getActiveTabId(): string | null {
@@ -36,15 +41,20 @@ export class BrowserSession {
   }
 
   async ensureBrowser(onProgress?: (msg: string) => void): Promise<void> {
-    if (this.browser) return;
+    if (this.context) return;
     onProgress?.("Launching browser...");
     try {
-      this.browser = await chromium.launch({
+      this.context = await chromium.launchPersistentContext(this.profileDir, {
         headless: this.settings.headless ?? false,
-      });
-      this.context = await this.browser.newContext({
         viewport: { width: 1280, height: 800 },
+        locale: "en-US",
+        timezoneId: "America/New_York",
+        userAgent:
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+        args: ["--disable-blink-features=AutomationControlled"],
+        ignoreDefaultArgs: ["--enable-automation"],
       });
+      await this.context.addInitScript(STEALTH_INIT_SCRIPT);
     } catch (err) {
       throw new Error(formatBrowserError(err));
     }
@@ -135,8 +145,6 @@ export class BrowserSession {
     this.activeTabId = null;
     await this.context?.close().catch(() => {});
     this.context = null;
-    await this.browser?.close().catch(() => {});
-    this.browser = null;
   }
 
   defaultTimeout(override?: number): number {

@@ -38,7 +38,8 @@ const GUIDELINES = [
   "Use write or edit once with the full content — do not call the same tool repeatedly with identical arguments.",
   "Use docs for library/API questions; use web_search for news, releases, and current events.",
   "Use schedule for Telegram reminders (in_minutes) and daily tasks (daily_at + kind=task) — e.g. news every morning.",
-  "Use the browser tool for web tasks: always getPageContent before clicking unfamiliar pages.",
+  "Use the browser tool for web tasks: always getPageContent after search/navigation to see listings.",
+  "For search boxes, browser type presses Enter automatically to submit — then call getPageContent to read results.",
   "Before purchases, bookings, or deletions in the browser, set requiresApproval: true and use waitForUser for CAPTCHA/OTP/payment.",
   "Never enter credit card numbers via the browser tool — ask the user to complete payment manually.",
   "Use the skill tool when a listed skill matches the task.",
@@ -126,12 +127,16 @@ export function systemPromptForModel(model: Model, base?: string): string {
   const prompt = base ?? buildDefaultSystemPrompt();
 
   if (model.provider === "groq") {
+    const gptOssNote = model.id.includes("gpt-oss")
+      ? `
+- GPT-OSS: use exact tool names only (browser, read, grep, etc.). Never append <|channel|>, commentary, or other tokens to tool names.`
+      : "";
     return `${prompt}
 
 Provider note (Groq):
 - Use structured function calls only — the API rejects any <function=...> text in the model output.
 - Pass arguments as a JSON object, e.g. {"query": "search terms"} for web_search, {"command": "..."} for bash.
-- Do not wrap arguments in parentheses or output pseudo-JSON outside the tool-call channel.`;
+- Do not wrap arguments in parentheses or output pseudo-JSON outside the tool-call channel.${gptOssNote}`;
   }
 
   return prompt;

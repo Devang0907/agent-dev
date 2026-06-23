@@ -4,6 +4,7 @@ import {
   extractFailedGeneration,
   sanitizeErrorForUser,
   stripMalformedToolText,
+  recoverToolCallsFromValidationError,
 } from "../providers/openai-compat.js";
 import { streamChat } from "../providers/registry.js";
 import type { ChatMessage, Model, ToolCall } from "../providers/types.js";
@@ -36,6 +37,7 @@ export interface PermissionRequest {
 
 const MAX_TOOL_ROUNDS = Number(process.env.AGENT_MAX_TOOL_ROUNDS) || 50;
 const MAX_SAME_TOOL_CALLS = 2;
+const MAX_BROWSER_SAME_TOOL_CALLS = 10;
 
 const DEFAULT_SYSTEM_PROMPT = buildDefaultSystemPrompt();
 
@@ -78,7 +80,9 @@ export interface AgentLoopOptions {
 }
 
 function isToolUseFailedError(message: string): boolean {
-  return /Failed to call a function|tool_use_failed|failed_generation/i.test(message);
+  return /Failed to call a function|tool_use_failed|failed_generation|Tool call validation failed/i.test(
+    message,
+  );
 }
 
 function hadSuccessfulToolResults(context: ChatMessage[]): boolean {
@@ -116,6 +120,9 @@ function resolveToolCalls(content: string, toolCalls: ToolCall[], error?: string
     }
     const fromError = dedupeToolCalls(normalizeToolCalls(parseMalformedToolCalls(error)));
     if (fromError.length > 0) return fromError;
+
+    const fromValidation = dedupeToolCalls(recoverToolCallsFromValidationError(error));
+    if (fromValidation.length > 0) return fromValidation;
   }
 
   return [];
@@ -155,11 +162,14 @@ async function runToolBatch(
     const prev = callCounts.get(sig) ?? 0;
     callCounts.set(sig, prev + 1);
 
-    if (prev >= MAX_SAME_TOOL_CALLS) {
-      const skip = "Skipped — already executed this action.";
+    const maxRepeats = tc.name === "browser" ? MAX_BROWSER_SAME_TOOL_CALLS : MAX_SAME_TOOL_CALLS;
+    if (prev >= maxRepeats) {
+      const skip = "Skipped — already executed this action too many times. Try a different browser action or selector.";
       onEvent({ type: "tool_result", toolCallId: tc.id, name: tc.name, result: skip });
       context.push({ role: "tool", content: skip, toolCallId: tc.id, name: tc.name });
-      stopAfterBatch = true;
+      if (tc.name !== "browser") {
+        stopAfterBatch = true;
+      }
       continue;
     }
 

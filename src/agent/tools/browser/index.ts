@@ -25,7 +25,8 @@ export const browserTool: ToolDefinition = {
   name: "browser",
   description:
     "Control a real Chromium browser for web tasks: search, forms, booking, scraping, screenshots. " +
-    "Inspect pages with getPageContent before interacting. Session persists across calls. " +
+    "Inspect pages with getPageContent before interacting. type auto-presses Enter to submit searches unless submit=false. " +
+    "Amazon search: use selector #twotabsearchtextbox or input[name='field-keywords']. Session persists across calls. " +
     "Set requiresApproval before purchases/bookings. Use waitForUser for CAPTCHA, OTP, or payment steps.",
   parameters: {
     type: "object",
@@ -66,6 +67,14 @@ export const browserTool: ToolDefinition = {
       reason: {
         type: "string",
         description: "Reason shown to user for waitForUser action",
+      },
+      submit: {
+        type: "boolean",
+        description: "For type: press Enter after typing to submit forms/searches (default true). Set false to only type.",
+      },
+      pressKey: {
+        type: "string",
+        description: "For type with submit: key to press after typing (default Enter)",
       },
     },
     required: ["action"],

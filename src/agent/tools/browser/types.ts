@@ -55,6 +55,10 @@ export interface BrowserToolArgs {
   timeout?: number;
   requiresApproval?: boolean;
   reason?: string;
+  /** Press Enter after typing (useful for search boxes). Default true when action is type. */
+  submit?: boolean;
+  /** Key to press after type (default Enter when submit is true). */
+  pressKey?: string;
 }
 
 export interface BrowserSettings {

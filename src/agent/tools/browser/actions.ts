@@ -5,6 +5,7 @@ import { SCREENSHOTS_DIR } from "../../../config/paths.js";
 import { getBrowserContext } from "../browser-context.js";
 import { detectPageBlockers } from "./detectors.js";
 import { formatBrowserError } from "./errors.js";
+import { dismissCommonOverlays, scrollForLazyContent, waitForPageSettle } from "./page-utils.js";
 import { getBrowserSession } from "./session.js";
 import type { BrowserToolArgs } from "./types.js";
 
@@ -20,6 +21,23 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 1): Promise<T> {
     }
     throw err;
   }
+}
+
+async function afterNavigation(page: Page, onProgress?: (msg: string) => void): Promise<void> {
+  onProgress?.("Waiting for page to load...");
+  await waitForPageSettle(page);
+  const dismissed = await dismissCommonOverlays(page);
+  if (dismissed.length > 0) {
+    onProgress?.(`Dismissed overlay (${dismissed[0]})`);
+  }
+}
+
+async function humanType(page: Page, selector: string, text: string, timeout: number): Promise<void> {
+  const locator = page.locator(selector).first();
+  await locator.waitFor({ state: "visible", timeout });
+  await locator.click({ timeout });
+  await locator.fill("");
+  await locator.pressSequentially(text, { delay: 60 });
 }
 
 async function assertSelector(page: Page, selector: string, timeout: number): Promise<void> {
@@ -49,6 +67,35 @@ async function buildPageContent(page: Page): Promise<string> {
   const url = page.url();
   const title = await page.title();
 
+  await scrollForLazyContent(page);
+
+  const listings = await page.evaluate(() => {
+    const items: string[] = [];
+    const selectors = [
+      '[data-component-type="s-search-result"]',
+      '[data-asin]:not([data-asin=""])',
+      ".s-result-item[data-asin]",
+      '[data-testid="product-card"]',
+      ".product-card",
+      "article",
+    ];
+    for (const sel of selectors) {
+      const nodes = Array.from(document.querySelectorAll(sel)).slice(0, 15);
+      for (const node of nodes) {
+        const text = (node as HTMLElement).innerText?.replace(/\s+/g, " ").trim().slice(0, 200);
+        const asin = node.getAttribute("data-asin");
+        const link = node.querySelector("a[href]") as HTMLAnchorElement | null;
+        const href = link?.href?.split("?")[0] ?? "";
+        if (text && text.length > 10) {
+          items.push(asin ? `[asin=${asin}] ${text}` : href ? `[${href}] ${text}` : text);
+        }
+        if (items.length >= 12) break;
+      }
+      if (items.length >= 8) break;
+    }
+    return items;
+  });
+
   const interactive = await page.evaluate(() => {
     const elements: { tag: string; role: string; selector: string; label: string }[] = [];
     const candidates = Array.from(
@@ -57,20 +104,22 @@ async function buildPageContent(page: Page): Promise<string> {
       ),
     );
     for (const el of candidates) {
-      if (elements.length >= 40) break;
+      if (elements.length >= 50) break;
       const tag = el.tagName.toLowerCase();
       const role = el.getAttribute("role") ?? "";
       const id = el.id;
       const name = el.getAttribute("name");
       const testId = el.getAttribute("data-testid");
+      const ariaLabel = el.getAttribute("aria-label");
       let selector = tag;
-      if (id) selector = `#${id}`;
+      if (id) selector = `#${CSS.escape(id)}`;
       else if (testId) selector = `[data-testid="${testId}"]`;
       else if (name) selector = `${tag}[name="${name}"]`;
+      else if (ariaLabel) selector = `${tag}[aria-label="${ariaLabel.replace(/"/g, '\\"')}"]`;
       const label =
         (el as HTMLElement).innerText?.trim().slice(0, 80) ||
         el.getAttribute("placeholder") ||
-        el.getAttribute("aria-label") ||
+        ariaLabel ||
         "";
       if (!label && tag === "input") continue;
       elements.push({ tag, role, selector, label });
@@ -79,14 +128,27 @@ async function buildPageContent(page: Page): Promise<string> {
   });
 
   const visibleText = await page.evaluate(() => {
-    const body = document.body;
-    return body?.innerText?.replace(/\s+/g, " ").trim().slice(0, 4000) ?? "";
+    const main =
+      document.querySelector('[role="main"]') ||
+      document.querySelector("#search") ||
+      document.querySelector("#centerCol") ||
+      document.body;
+    return (main as HTMLElement)?.innerText?.replace(/\s+/g, " ").trim().slice(0, 3500) ?? "";
   });
 
   const lines = [
     `URL: ${url}`,
     `Title: ${title}`,
     "",
+  ];
+
+  if (listings.length > 0) {
+    lines.push("## Listings / search results");
+    lines.push(...listings.map((item, i) => `${i + 1}. ${item}`));
+    lines.push("");
+  }
+
+  lines.push(
     "## Visible text (truncated)",
     visibleText,
     "",
@@ -94,7 +156,7 @@ async function buildPageContent(page: Page): Promise<string> {
     ...interactive.map(
       (e, i) => `${i + 1}. <${e.tag}${e.role ? ` role=${e.role}` : ""}> label="${e.label}" selector="${e.selector}"`,
     ),
-  ];
+  );
 
   let result = lines.join("\n");
   if (result.length > MAX_PAGE_CONTENT_CHARS) {
@@ -121,11 +183,13 @@ export async function executeBrowserAction(args: BrowserToolArgs): Promise<strin
       case "open": {
         if (!args.url) return "Error: url is required for open action.";
         const tabId = await session.openTab(args.url, onProgress);
-        const pauseNote = await maybePauseForBlockers(session.resolvePage(tabId));
+        const page = session.resolvePage(tabId);
+        await afterNavigation(page, onProgress);
+        const pauseNote = await maybePauseForBlockers(page);
         onProgress(`Opened ${args.url} (tab ${tabId})`);
         return pauseNote
           ? `Opened browser at ${args.url} (tab ${tabId}). ${pauseNote}`
-          : `Opened browser at ${args.url} (tab ${tabId}). Active tab: ${tabId}`;
+          : `Opened browser at ${args.url} (tab ${tabId}). Active tab: ${tabId}. URL: ${page.url()}`;
       }
 
       case "goto": {
@@ -135,6 +199,7 @@ export async function executeBrowserAction(args: BrowserToolArgs): Promise<strin
         await withRetry(() =>
           page.goto(args.url!, { waitUntil: "domcontentloaded", timeout: 60000 }),
         );
+        await afterNavigation(page, onProgress);
         const pauseNote = await maybePauseForBlockers(page);
         onProgress(`Navigated to ${args.url}`);
         return pauseNote
@@ -148,9 +213,11 @@ export async function executeBrowserAction(args: BrowserToolArgs): Promise<strin
         onProgress(`Clicking ${args.selector}...`);
         await assertSelector(page, args.selector, timeout);
         await withRetry(() => page.click(args.selector!, { timeout }));
+        await afterNavigation(page, onProgress);
         const pauseNote = await maybePauseForBlockers(page);
         onProgress(`Clicked ${args.selector}`);
-        return pauseNote ? `Clicked ${args.selector}. ${pauseNote}` : `Clicked ${args.selector}`;
+        const extra = pauseNote ? `. ${pauseNote}` : `. URL: ${page.url()}`;
+        return `Clicked ${args.selector}${extra}`;
       }
 
       case "type": {
@@ -158,10 +225,18 @@ export async function executeBrowserAction(args: BrowserToolArgs): Promise<strin
         if (args.text === undefined) return "Error: text is required for type action.";
         const page = session.resolvePage(args.tabId);
         onProgress(`Typing into ${args.selector}...`);
-        await assertSelector(page, args.selector, timeout);
-        await page.fill(args.selector, args.text, { timeout });
+        await humanType(page, args.selector, args.text, timeout);
+        const shouldSubmit = args.submit !== false;
+        if (shouldSubmit) {
+          const key = args.pressKey ?? "Enter";
+          onProgress(`Pressing ${key}...`);
+          await page.keyboard.press(key);
+          await afterNavigation(page, onProgress);
+        }
         onProgress(`Typed into ${args.selector}`);
-        return `Typed into ${args.selector}`;
+        return shouldSubmit
+          ? `Typed "${args.text}" into ${args.selector} and pressed ${args.pressKey ?? "Enter"}. URL: ${page.url()}`
+          : `Typed "${args.text}" into ${args.selector}`;
       }
 
       case "select": {
@@ -222,9 +297,11 @@ export async function executeBrowserAction(args: BrowserToolArgs): Promise<strin
 
       case "getPageContent": {
         const page = session.resolvePage(args.tabId);
-        onProgress("Reading page content...");
+        onProgress?.("Reading page content...");
+        await waitForPageSettle(page);
+        await dismissCommonOverlays(page);
         const content = await buildPageContent(page);
-        onProgress("Page content ready");
+        onProgress?.("Page content ready");
         return content;
       }
 
