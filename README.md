@@ -42,19 +42,22 @@ Requires **Node.js 20+**.
 | Google Gemini | `GEMINI_API_KEY` or `GOOGLE_API_KEY` | `gemini-2.5-pro`, `gemini-2.5-flash` |
 | Free (OpenRouter) | `OPENROUTER_API_KEY` | See [free models](#free-models-openrouter) below |
 
-Model refs use `provider/model-id`, e.g. `anthropic/claude-sonnet-4-6`, `openai/gpt-4.1`, or `free/deepseek/deepseek-r1:free`.
+Model refs use `provider/model-id`, e.g. `anthropic/claude-sonnet-4-6`, `openai/gpt-4.1`, or `free/openrouter/free`.
 
 ### Free models (OpenRouter)
 
-Free models use the `:free` suffix on OpenRouter. Availability changes over time; agent-dev migrates retired slugs and retries fallbacks automatically.
+Free models use the `:free` suffix on OpenRouter. Availability changes often — agent-dev migrates retired slugs and retries fallbacks automatically. If a model fails, use **`/model openrouter/free`** (auto-picks a working free model).
 
 | Model | Slug |
 |-------|------|
+| Free auto (recommended) | `openrouter/free` |
 | Llama 3.3 70B (free) | `meta-llama/llama-3.3-70b-instruct:free` |
-| DeepSeek R1 (free) | `deepseek/deepseek-r1:free` |
-| Qwen3 235B (free) | `qwen/qwen3-235b-a22b:free` |
-| Gemma 3 27B (free) | `google/gemma-3-27b-it:free` |
-| Free auto | `openrouter/free` — picks any available free model (most reliable) |
+| Qwen3 Coder (free) | `qwen/qwen3-coder:free` |
+| Qwen3 Next 80B (free) | `qwen/qwen3-next-80b-a3b-instruct:free` |
+| GPT-OSS 120B (free) | `openai/gpt-oss-120b:free` |
+| Gemma 4 26B (free) | `google/gemma-4-26b-a4b-it:free` |
+
+Retired slugs like `deepseek/deepseek-r1:free` and `qwen/qwen3-235b-a22b:free` are remapped automatically on load.
 
 Default provider/model: `free/meta-llama/llama-3.3-70b-instruct:free`.
 
