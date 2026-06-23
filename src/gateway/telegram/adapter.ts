@@ -4,6 +4,7 @@ import type { CoreAgentEvent } from "../../agent/loop.js";
 import type { PermissionRequest } from "../../agent/loop.js";
 import type { ToolCall } from "../../providers/types.js";
 import { chunkMessage, formatPermissionMessage, formatToolStatus, stripMalformedToolText, truncate } from "./format.js";
+import { setScheduleContext } from "../../agent/tools/schedule-context.js";
 import {
   logAgentEnd,
   logAgentStart,
@@ -205,12 +206,17 @@ export class TelegramSessionBridge {
     }
   }
 
-  async prompt(text: string): Promise<void> {
+  async prompt(text: string, userId?: number): Promise<void> {
     this.textBuffer = "";
     this.agentLineStarted = false;
-    await this.api.sendChatAction(this.chatId, "typing");
-    await this.session.prompt(text);
-    await this.flushTextBuffer();
+    setScheduleContext({ chatId: this.chatId, userId });
+    try {
+      await this.api.sendChatAction(this.chatId, "typing");
+      await this.session.prompt(text);
+      await this.flushTextBuffer();
+    } finally {
+      setScheduleContext(null);
+    }
   }
 
   private async flushTextBuffer(): Promise<void> {

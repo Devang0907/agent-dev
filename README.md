@@ -1,6 +1,6 @@
 # agent-dev
 
-A minimal terminal coding agent with an Ink TUI. Chat with an AI that can read and edit code, search the web, run git/shell commands (with approval), use MCP servers, load skills, and optionally delegate work through a **boss orchestrator** that coordinates specialized worker agents.
+A minimal terminal coding agent with an Ink TUI. Chat with an AI that can read and edit code, search the web, run git/shell commands (with approval), use MCP servers, load skills, schedule Telegram reminders and daily tasks, and optionally delegate work through a **boss orchestrator** that coordinates specialized worker agents.
 
 ## Quick start
 
@@ -92,7 +92,7 @@ agent skills list
 
 ## Telegram gateway
 
-Chat with agent-dev from your phone via Telegram (OpenClaw-style). The gateway runs on your PC, uses long-polling (no public URL or port forwarding), and forwards DMs to the agent. Shell/git/exec approvals arrive as **Approve / Deny** inline buttons.
+Chat with agent-dev from your phone via Telegram (OpenClaw-style). The gateway runs on your PC, uses long-polling (no public URL or port forwarding), and forwards DMs to the agent. Shell/git/exec approvals arrive as **Approve / Deny** inline buttons. You can also set **reminders** and **daily tasks** (e.g. morning news) that fire while the gateway is running.
 
 On first connect, send `/start` (or any message) to receive a welcome guide with available commands and capabilities.
 
@@ -161,6 +161,34 @@ On Windows, run it in a dedicated terminal, or use Task Scheduler / [pm2](https:
 | `/mode` | Show current mode and available options |
 | `/model` | List available models |
 | `/model <provider/id>` | Switch model (e.g. `/model groq/llama-3.3-70b-versatile`) |
+| `/schedules` | List active reminders and daily tasks for this chat |
+
+### Reminders and scheduled tasks
+
+While the Telegram gateway is running, you can ask the agent to remind you later or run recurring tasks (e.g. morning news). The agent uses the built-in **`schedule`** tool; a background scheduler checks every 30 seconds and delivers due items to your chat.
+
+**One-shot reminders** — simple notifications at a relative or absolute time:
+
+```
+Remind me to drink water in 5 minutes
+Remind me to call mom in 2 hours
+```
+
+**Daily recurring tasks** — the agent runs your instruction each day (uses `web_search` for news, etc.):
+
+```
+Send me the top news headlines every morning at 8:00
+Give me a daily weather summary at 7:30
+```
+
+| Schedule kind | When it fires |
+|---------------|---------------|
+| `reminder` | Sends `⏰ Reminder: …` in Telegram |
+| `task` | Runs the agent with your message (good for news, reports) |
+
+Timing options the agent can set: `in_minutes` (e.g. 5), `daily_at` in 24h local time (e.g. `08:00`), or `at` (ISO datetime). Schedules are stored in `~/.agent-dev/schedules.json`. Ask the agent to cancel a schedule by id, or use `/schedules` to list them.
+
+**Requirements:** the gateway process must stay running (see [Run](#run) above). If a **task** fires while the agent is busy, it retries in about a minute. **Reminders** always send immediately.
 
 ### Security
 
@@ -234,7 +262,7 @@ Boss mode uses the same model you select in `/model`. Workers run in isolated co
 
 ## Tools
 
-The agent has **17 built-in tools** (`delegate` is boss-only; 16 are available in normal mode):
+The agent has **18 built-in tools** (`delegate` is boss-only; 17 are available in normal mode):
 
 | Tool | Description |
 |------|-------------|
@@ -255,6 +283,7 @@ The agent has **17 built-in tools** (`delegate` is boss-only; 16 are available i
 | `verify` | Auto-run tests/build from `package.json` scripts |
 | `mcp` | Call tools from MCP servers (see below) |
 | `skill` | Load a skill by name from `available_skills` |
+| `schedule` | Schedule Telegram reminders and daily recurring tasks (gateway must be running) |
 
 File operations are restricted to the current working directory. Shell commands, git writes, SQL mutations, and MCP tool calls prompt for approval (`y` / `n`). In boss mode, approval prompts show which worker requested the action.
 
@@ -334,6 +363,7 @@ All config lives under `~/.agent-dev/` (override with `AGENT_DEV_DIR`):
 | `mcp.json` | MCP server definitions |
 | `traces/<sessionId>/` | Boss worker trace logs (JSONL) |
 | `telegram-sessions.json` | Telegram chat → session id mapping |
+| `schedules.json` | Active reminders and daily scheduled tasks |
 
 Example `settings.json`:
 
@@ -378,7 +408,8 @@ src/
 │   ├── orchestrator/        # Boss prompt, workers, traces
 │   └── tools/               # Built-in tool implementations
 ├── gateway/
-│   └── telegram/            # Telegram bot daemon (grammY)
+│   ├── telegram/            # Telegram bot daemon (grammY)
+│   └── scheduler.ts         # Fires due reminders and daily tasks
 ├── providers/               # OpenAI, Groq, Gemini, OpenRouter
 ├── ui/                      # Ink TUI
 └── modes/print-mode.ts      # Headless / CI output

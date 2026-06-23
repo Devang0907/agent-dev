@@ -25,6 +25,8 @@ import {
   toggleBossMode,
 } from "./commands.js";
 import { formatWelcomeMessage } from "./welcome.js";
+import { startScheduleRunner } from "../scheduler.js";
+import { loadSchedules } from "../../agent/tools/schedule.js";
 import type { Context } from "grammy";
 
 const TELEGRAM_SLASH_COMMANDS = new Set([
@@ -39,6 +41,7 @@ const TELEGRAM_SLASH_COMMANDS = new Set([
   "/boss",
   "/mode",
   "/model",
+  "/schedules",
 ]);
 
 export async function runTelegramGateway(cliOptions: TelegramGatewayOptions & { boss?: boolean; model?: string }): Promise<void> {
@@ -76,6 +79,11 @@ export async function runTelegramGateway(cliOptions: TelegramGatewayOptions & { 
 
   const bot = new Bot(config.botToken);
   const bridges = new Map<number, TelegramSessionBridge>();
+
+  startScheduleRunner({
+    api: bot.api,
+    getBridge: (chatId) => bridges.get(chatId),
+  });
 
   function getOrCreateBridge(chatId: number): TelegramSessionBridge {
     let bridge = bridges.get(chatId);
@@ -330,6 +338,32 @@ export async function runTelegramGateway(cliOptions: TelegramGatewayOptions & { 
     await ctx.reply(applyModel(bridge.session, arg));
   });
 
+  bot.command("schedules", async (ctx) => {
+    const chatId = ctx.chat?.id;
+    const userId = ctx.from?.id;
+    if (!chatId || !userId) return;
+
+    logUserCommand(userId, "/schedules");
+
+    const store = loadSchedules();
+    const entries = Object.values(store)
+      .filter((e) => e.enabled && e.chatId === chatId)
+      .sort((a, b) => a.nextFireAt.localeCompare(b.nextFireAt));
+
+    if (entries.length === 0) {
+      await ctx.reply("No active schedules for this chat.");
+      return;
+    }
+
+    const lines = entries.map((e) => {
+      const when = e.dailyAt
+        ? `daily ${e.dailyAt}`
+        : new Date(e.nextFireAt).toLocaleString();
+      return `• ${e.id} [${e.kind}] ${when}\n  ${e.message}`;
+    });
+    await ctx.reply(["Active schedules:", "", ...lines].join("\n"));
+  });
+
   bot.on("callback_query:data", async (ctx) => {
     const data = ctx.callbackQuery.data;
     const parsed = parseApprovalCallback(data);
@@ -389,7 +423,7 @@ export async function runTelegramGateway(cliOptions: TelegramGatewayOptions & { 
     // Do not await — grammY long-polling processes updates sequentially; blocking
     // here would prevent Approve/Deny callback_query from being handled.
     void bridge
-      .prompt(text)
+      .prompt(text, userId)
       .catch(async (err) => {
         const message = err instanceof Error ? err.message : String(err);
         console.error("[telegram] prompt error:", err);

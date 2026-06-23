@@ -24,6 +24,7 @@ const TOOL_SNIPPETS: Record<string, string> = {
   verify: "Run tests or typecheck after code changes",
   mcp: "Call external MCP tools; mutations need approval",
   skill: "Load a specialized workflow skill by name",
+  schedule: "Schedule Telegram reminders and daily recurring tasks",
 };
 
 const GUIDELINES = [
@@ -34,6 +35,7 @@ const GUIDELINES = [
   "After code changes, run verify when a test or typecheck script exists.",
   "Use write or edit once with the full content — do not call the same tool repeatedly with identical arguments.",
   "Use docs for library/API questions; use web_search for news, releases, and current events.",
+  "Use schedule for Telegram reminders (in_minutes) and daily tasks (daily_at + kind=task) — e.g. news every morning.",
   "Use the skill tool when a listed skill matches the task.",
   "git write actions, bash, exec, database mutations, and mcp call_tool require user approval — proceed only after approval.",
   "When the task is complete, reply briefly to confirm what was done.",

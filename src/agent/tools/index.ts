@@ -26,6 +26,7 @@ import { docsTool, executeDocs } from "./docs.js";
 import { verifyTool, executeVerify } from "./verify.js";
 import { mcpTool, executeMcp, formatMcpPermissionCommand } from "./mcp.js";
 import { skillTool, executeSkill } from "./skill.js";
+import { scheduleTool, executeSchedule } from "./schedule.js";
 
 export interface AgentTool {
   definition: ToolDefinition;
@@ -50,6 +51,7 @@ export const BUILTIN_TOOLS: AgentTool[] = [
   { definition: verifyTool, execute: (args, wd) => executeVerify(args as { command?: string; type?: string }, wd) },
   { definition: mcpTool, execute: (args) => executeMcp(args as { action: string; server?: string; tool?: string; arguments?: Record<string, unknown> }) },
   { definition: skillTool, execute: (args) => executeSkill(args as { name: string }) },
+  { definition: scheduleTool, execute: (args) => executeSchedule(args as Parameters<typeof executeSchedule>[0]) },
 ];
 
 /** @deprecated Use needsToolPermission instead */
