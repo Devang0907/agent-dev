@@ -181,6 +181,13 @@ export function parseMalformedToolCalls(text: string): ToolCall[] {
   }
 
   if (results.length === 0) {
+    const namedTagRe = /<function>([a-zA-Z0-9_]+)(\{[\s\S]*?)<\/function>/gi;
+    while ((match = namedTagRe.exec(text)) !== null) {
+      tryAdd(match[1]!.trim(), match[2]!);
+    }
+  }
+
+  if (results.length === 0) {
     const toolCallRe = /<tool_call>\s*([a-zA-Z0-9_]+)([\s\S]*?)<\/tool_call>/gi;
     while ((match = toolCallRe.exec(text)) !== null) {
       tryAdd(match[1]!.trim(), match[2]!);
@@ -188,6 +195,16 @@ export function parseMalformedToolCalls(text: string): ToolCall[] {
   }
 
   return results;
+}
+
+/** Remove text-based tool call markup some models emit instead of structured tool_calls. */
+export function stripMalformedToolText(text: string): string {
+  return text
+    .replace(/<function>[\s\S]*?<\/function>/gi, "")
+    .replace(/<function=[\s\S]*?<\/function>/gi, "")
+    .replace(/<tool_call>[\s\S]*?<\/tool_call>/gi, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 export function extractFailedGeneration(errorMessage: string): string | null {

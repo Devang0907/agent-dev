@@ -3,6 +3,7 @@ import {
   parseMalformedToolCalls,
   extractFailedGeneration,
   sanitizeErrorForUser,
+  stripMalformedToolText,
 } from "../providers/openai-compat.js";
 import { streamChat } from "../providers/registry.js";
 import type { ChatMessage, Model, ToolCall } from "../providers/types.js";
@@ -230,15 +231,27 @@ async function collectStream(
   return { content, toolCalls };
 }
 
+function lastToolResult(context: ChatMessage[]): string | undefined {
+  for (let i = context.length - 1; i >= 0; i--) {
+    const msg = context[i];
+    if (msg?.role === "tool" && msg.content.trim()) {
+      return msg.content.trim();
+    }
+  }
+  return undefined;
+}
+
 function finishGracefully(
   context: ChatMessage[],
   content: string,
   onEvent: (event: AgentEvent) => void,
 ): void {
-  const msg = content.trim() || "Done — changes saved successfully.";
-  if (!content.trim()) {
-    onEvent({ type: "text_delta", delta: msg });
-  }
+  const stripped = stripMalformedToolText(content);
+  const msg =
+    stripped ||
+    lastToolResult(context) ||
+    "Done — changes saved successfully.";
+  onEvent({ type: "text_delta", delta: msg });
   context.push({ role: "assistant", content: msg });
   onEvent({ type: "turn_end" });
 }

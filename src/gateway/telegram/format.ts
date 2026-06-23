@@ -1,4 +1,5 @@
 import type { ToolCall } from "../../providers/types.js";
+import { stripMalformedToolText } from "../../providers/openai-compat.js";
 
 const TELEGRAM_MAX_LENGTH = 4096;
 const CHUNK_SIZE = 4000;
@@ -55,5 +56,7 @@ export function formatPermissionMessage(command: string, workerId?: string, runI
   const workerTag = workerId && runId ? ` [${workerId}#${runId}]` : "";
   return `Command approval required${workerTag}:\n\n${truncate(command, 1500)}`;
 }
+
+export { stripMalformedToolText };
 
 export { TELEGRAM_MAX_LENGTH };

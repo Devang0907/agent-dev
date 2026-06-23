@@ -125,7 +125,17 @@ agent telegram --workdir D:/projects/MyRepo
 agent telegram --boss --verbose
 ```
 
-Keep the process running while you use the bot. On Windows, run it in a dedicated terminal, or use Task Scheduler / [pm2](https://pm2.keymetrics.io/) to keep it alive on login.
+Keep the process running while you use the bot. While the gateway runs, the terminal shows a live log of Telegram activity:
+
+```
+[user] (123456789) list files in src
+[agent] Here are the files in src/...
+[tool] Running: grep pattern
+[approval] npm test
+[approval] Approved
+```
+
+On Windows, run it in a dedicated terminal, or use Task Scheduler / [pm2](https://pm2.keymetrics.io/) to keep it alive on login.
 
 ### Telegram commands
 
@@ -135,6 +145,13 @@ Keep the process running while you use the bot. On Windows, run it in a dedicate
 | `/new` | Start a new agent session |
 | `/status` | Model, workdir, session id, busy/idle |
 | `/stop` | Abort the current turn |
+| `/build` | Switch to Build mode (edit files, run shell) |
+| `/plan` | Switch to Plan mode (read-only exploration) |
+| `/boss` | Toggle boss orchestrator mode |
+| `/boss on` / `/boss off` | Enable or disable boss mode |
+| `/mode` | Show current mode and available options |
+| `/model` | List available models |
+| `/model <provider/id>` | Switch model (e.g. `/model groq/llama-3.3-70b-versatile`) |
 
 ### Security
 

@@ -41,23 +41,23 @@ export function isToolBlockedInPlanMode(
   if (name === "write" || name === "edit") {
     const path = String(args.path ?? "");
     if (isAllowedPlanWritePath(path)) return null;
-    return "Plan mode: file edits are not allowed (except `.agent-dev/plans/*.md`). Press Tab to switch to Build mode.";
+    return "Plan mode: file edits are not allowed (except `.agent-dev/plans/*.md`). Use /build in Telegram or Tab in terminal to switch to Build mode.";
   }
 
   if (name === "diff") return null;
 
   if (PLAN_BLOCKED_TOOLS.has(name)) {
     if (name === "bash" || name === "exec") {
-      return "Plan mode: shell commands are not allowed. Press Tab to switch to Build mode.";
+      return "Plan mode: shell commands are not allowed. Use /build in Telegram or Tab in terminal to switch to Build mode.";
     }
     if (name === "verify") {
-      return "Plan mode: running tests/builds is not allowed. Press Tab to switch to Build mode.";
+      return "Plan mode: running tests/builds is not allowed. Use /build in Telegram or Tab in terminal to switch to Build mode.";
     }
     if (name === "database") {
-      return "Plan mode: database queries are not allowed. Press Tab to switch to Build mode.";
+      return "Plan mode: database queries are not allowed. Use /build in Telegram or Tab in terminal to switch to Build mode.";
     }
     if (name === "mcp") {
-      return "Plan mode: MCP tool calls are not allowed. Press Tab to switch to Build mode.";
+      return "Plan mode: MCP tool calls are not allowed. Use /build in Telegram or Tab in terminal to switch to Build mode.";
     }
   }
 
@@ -65,7 +65,7 @@ export function isToolBlockedInPlanMode(
     const action = String(args.action ?? "").toLowerCase();
     const writeActions = new Set(["commit", "add", "reset", "checkout", "merge", "rebase", "push", "pull", "stash", "tag"]);
     if (writeActions.has(action)) {
-      return "Plan mode: git write actions are not allowed. Press Tab to switch to Build mode.";
+      return "Plan mode: git write actions are not allowed. Use /build in Telegram or Tab in terminal to switch to Build mode.";
     }
   }
 
@@ -92,7 +92,7 @@ You SHOULD:
 - Ask clarifying questions before proposing implementation
 
 Plans directory: ${plansDir}
-When the plan is ready, tell the user to press Tab to switch to Build mode to implement.`;
+When the plan is ready, tell the user to switch to Build mode (/build in Telegram, Tab in terminal) to implement.`;
 }
 
 export function buildModeSystemAppend(): string {

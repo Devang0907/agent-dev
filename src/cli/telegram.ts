@@ -58,10 +58,15 @@ Environment:
   TELEGRAM_ALLOWED_USER_IDS  Comma-separated user IDs
 
 Telegram commands:
-  /whoami    Show your Telegram user ID (for allowlist setup)
-  /new       Start a new agent session
-  /status    Model, workdir, session id
-  /stop      Abort current turn
+  /whoami              Show your Telegram user ID (for allowlist setup)
+  /new                 Start a new agent session
+  /status              Model, workdir, session id
+  /stop                Abort current turn
+  /build               Switch to Build mode (edit files, run shell)
+  /plan                Switch to Plan mode (read-only)
+  /boss [on|off]       Toggle or set boss orchestrator mode
+  /mode [build|plan|boss]  Show or change mode
+  /model [provider/id] Show or change model
 `);
 }
 

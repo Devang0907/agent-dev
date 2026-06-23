@@ -1,4 +1,4 @@
-import { Bot } from "grammy";
+import { Bot, GrammyError } from "grammy";
 import { loadSettings, setOrchestratorMode } from "../../config/settings.js";
 import { SessionManager } from "../../session/manager.js";
 import { AgentSession } from "../../agent/session.js";
@@ -12,10 +12,39 @@ import {
   parseApprovalCallback,
   sendBusyReply,
 } from "./adapter.js";
+import { logGateway, logUserCommand, logUserMessage } from "./logger.js";
+import {
+  applyAgentMode,
+  applyBossMode,
+  applyModel,
+  formatModeStatus,
+  formatModelList,
+  parseBossArg,
+  toggleBossMode,
+} from "./commands.js";
 
-const SLASH_COMMANDS = new Set(["/new", "/whoami", "/status", "/stop"]);
+const TELEGRAM_SLASH_COMMANDS = new Set([
+  "/new",
+  "/whoami",
+  "/status",
+  "/stop",
+  "/build",
+  "/plan",
+  "/boss",
+  "/mode",
+  "/model",
+]);
 
 export async function runTelegramGateway(cliOptions: TelegramGatewayOptions & { boss?: boolean; model?: string }): Promise<void> {
+  // Prevent stdin EOF from exiting the gateway on Windows terminals.
+  if (process.stdin.isTTY) {
+    process.stdin.resume();
+  }
+
+  process.on("unhandledRejection", (reason) => {
+    console.error("[telegram] Unhandled rejection:", reason);
+  });
+
   const config = loadTelegramConfig(cliOptions);
   process.chdir(config.workdir);
 
@@ -33,6 +62,11 @@ export async function runTelegramGateway(cliOptions: TelegramGatewayOptions & { 
   }
 
   console.log(`[telegram] Gateway starting (workdir: ${config.workdir})`);
+  const startupMode = settings.agentMode ?? "build";
+  const startupBoss = settings.orchestratorMode === "boss";
+  console.log(
+    `[telegram] Default mode: ${startupMode}${startupBoss ? " · BOSS" : ""} — use /build, /plan, /boss, /model from Telegram`,
+  );
 
   const bot = new Bot(config.botToken);
   const bridges = new Map<number, TelegramSessionBridge>();
@@ -61,6 +95,7 @@ export async function runTelegramGateway(cliOptions: TelegramGatewayOptions & { 
   bot.command("whoami", async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId) return;
+    logUserCommand(userId, "/whoami");
     await ctx.reply(`Your Telegram user ID: ${userId}`);
   });
 
@@ -80,7 +115,10 @@ export async function runTelegramGateway(cliOptions: TelegramGatewayOptions & { 
 
   bot.command("new", async (ctx) => {
     const chatId = ctx.chat?.id;
-    if (!chatId) return;
+    const userId = ctx.from?.id;
+    if (!chatId || !userId) return;
+
+    logUserCommand(userId, "/new");
 
     const bridge = getOrCreateBridge(chatId);
     if (bridge.session.isRunning()) {
@@ -90,12 +128,16 @@ export async function runTelegramGateway(cliOptions: TelegramGatewayOptions & { 
 
     bridge.session.newSession();
     setSessionIdForChat(chatId, bridge.session.getSessionId());
+    logGateway("New session started");
     await ctx.reply("Started a new session.");
   });
 
   bot.command("status", async (ctx) => {
     const chatId = ctx.chat?.id;
-    if (!chatId) return;
+    const userId = ctx.from?.id;
+    if (!chatId || !userId) return;
+
+    logUserCommand(userId, "/status");
 
     const bridge = getOrCreateBridge(chatId);
     const model = bridge.session.getModel();
@@ -115,68 +157,235 @@ export async function runTelegramGateway(cliOptions: TelegramGatewayOptions & { 
 
   bot.command("stop", async (ctx) => {
     const chatId = ctx.chat?.id;
-    if (!chatId) return;
+    const userId = ctx.from?.id;
+    if (!chatId || !userId) return;
+
+    logUserCommand(userId, "/stop");
+    logGateway("Turn aborted by user");
 
     const bridge = getOrCreateBridge(chatId);
     bridge.session.abort();
     await ctx.reply("Aborted current turn.");
   });
 
+  bot.command("build", async (ctx) => {
+    const chatId = ctx.chat?.id;
+    const userId = ctx.from?.id;
+    if (!chatId || !userId) return;
+
+    logUserCommand(userId, "/build");
+    const bridge = getOrCreateBridge(chatId);
+    await ctx.reply(applyAgentMode(bridge.session, "build"));
+  });
+
+  bot.command("plan", async (ctx) => {
+    const chatId = ctx.chat?.id;
+    const userId = ctx.from?.id;
+    if (!chatId || !userId) return;
+
+    logUserCommand(userId, "/plan");
+    const bridge = getOrCreateBridge(chatId);
+    await ctx.reply(applyAgentMode(bridge.session, "plan"));
+  });
+
+  bot.command("boss", async (ctx) => {
+    const chatId = ctx.chat?.id;
+    const userId = ctx.from?.id;
+    if (!chatId || !userId) return;
+
+    const arg = typeof ctx.match === "string" ? ctx.match.trim() : "";
+    logUserCommand(userId, `/boss${arg ? ` ${arg}` : ""}`);
+
+    const bridge = getOrCreateBridge(chatId);
+    const action = parseBossArg(arg || undefined);
+    const message =
+      action === "toggle"
+        ? toggleBossMode(bridge.session)
+        : applyBossMode(bridge.session, action);
+    await ctx.reply(message);
+  });
+
+  bot.command("mode", async (ctx) => {
+    const chatId = ctx.chat?.id;
+    const userId = ctx.from?.id;
+    if (!chatId || !userId) return;
+
+    const arg = typeof ctx.match === "string" ? ctx.match.trim().toLowerCase() : "";
+    logUserCommand(userId, `/mode${arg ? ` ${arg}` : ""}`);
+
+    const bridge = getOrCreateBridge(chatId);
+
+    if (!arg) {
+      await ctx.reply(
+        [
+          formatModeStatus(bridge.session),
+          "",
+          "Commands:",
+          "  /build — full tool access (edit files, run shell)",
+          "  /plan — read-only exploration",
+          "  /boss — toggle boss orchestrator",
+          "  /boss on|off — enable/disable boss mode",
+        ].join("\n"),
+      );
+      return;
+    }
+
+    if (arg === "build") {
+      await ctx.reply(applyAgentMode(bridge.session, "build"));
+      return;
+    }
+    if (arg === "plan") {
+      await ctx.reply(applyAgentMode(bridge.session, "plan"));
+      return;
+    }
+    if (arg === "boss") {
+      await ctx.reply(toggleBossMode(bridge.session));
+      return;
+    }
+
+    const bossAction = parseBossArg(arg);
+    if (bossAction !== "toggle") {
+      await ctx.reply(applyBossMode(bridge.session, bossAction));
+      return;
+    }
+
+    await ctx.reply(`Unknown mode: ${arg}\n\nUse /mode to see options.`);
+  });
+
+  bot.command("model", async (ctx) => {
+    const chatId = ctx.chat?.id;
+    const userId = ctx.from?.id;
+    if (!chatId || !userId) return;
+
+    const arg = typeof ctx.match === "string" ? ctx.match.trim() : "";
+    logUserCommand(userId, `/model${arg ? ` ${arg}` : ""}`);
+
+    const bridge = getOrCreateBridge(chatId);
+
+    if (!arg) {
+      await ctx.reply(formatModelList(bridge.session));
+      return;
+    }
+
+    await ctx.reply(applyModel(bridge.session, arg));
+  });
+
   bot.on("callback_query:data", async (ctx) => {
     const data = ctx.callbackQuery.data;
     const parsed = parseApprovalCallback(data);
     if (!parsed) {
-      await ctx.answerCallbackQuery();
+      await safeAnswerCallback(ctx, undefined);
       return;
     }
 
     const chatId = ctx.chat?.id;
-    if (!chatId) return;
+    if (!chatId) {
+      await safeAnswerCallback(ctx, undefined);
+      return;
+    }
 
     const bridge = bridges.get(chatId);
+    const approved = parsed.action === "approve";
+    const label = approved ? "Approved" : "Denied";
+
     if (!bridge) {
-      await ctx.answerCallbackQuery({ text: "Session expired." });
+      await safeAnswerCallback(ctx, "Session expired.");
       return;
     }
 
     const messageId = ctx.callbackQuery.message?.message_id;
     if (!messageId) {
-      await ctx.answerCallbackQuery();
+      await safeAnswerCallback(ctx, undefined);
       return;
     }
 
-    await bridge.handleApprovalCallback(parsed.id, parsed.action === "approve", messageId);
-    await ctx.answerCallbackQuery({ text: parsed.action === "approve" ? "Approved" : "Denied" });
+    // Telegram requires answerCallbackQuery within ~10s — answer before slow work.
+    await safeAnswerCallback(ctx, label);
+
+    void bridge.handleApprovalCallback(parsed.id, approved, messageId);
   });
 
   bot.on("message:text", async (ctx) => {
     const text = ctx.message.text.trim();
-    if (!text || SLASH_COMMANDS.has(text.split(/\s/)[0]!)) return;
+    const userId = ctx.from?.id;
+    if (!text || !userId || TELEGRAM_SLASH_COMMANDS.has(text.split(/\s/)[0]!)) return;
 
     const chatId = ctx.chat.id;
     const bridge = getOrCreateBridge(chatId);
 
     if (bridge.session.isRunning()) {
+      logUserMessage(userId, text);
+      logGateway("Agent busy — message not queued");
       await sendBusyReply(ctx);
       return;
     }
 
-    try {
-      await bridge.prompt(text);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      console.error("[telegram] prompt error:", err);
-      await ctx.reply(`Error: ${message}`);
-    }
+    logUserMessage(userId, text);
+
+    // Do not await — grammY long-polling processes updates sequentially; blocking
+    // here would prevent Approve/Deny callback_query from being handled.
+    void bridge
+      .prompt(text)
+      .catch(async (err) => {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error("[telegram] prompt error:", err);
+        try {
+          await ctx.reply(`Error: ${message}`);
+        } catch (replyErr) {
+          console.error("[telegram] Failed to send error reply:", replyErr);
+        }
+      });
   });
 
   bot.catch((err) => {
+    if (isExpiredCallbackError(err)) return;
     console.error("[telegram] Bot error:", err);
   });
 
-  await bot.start({
-    onStart: (botInfo) => {
-      console.log(`[telegram] Bot @${botInfo.username} is running (long polling)`);
-    },
-  });
+  // Restart polling if it stops unexpectedly (network blips, etc.).
+  while (true) {
+    try {
+      await bot.start({
+        onStart: (botInfo) => {
+          console.log(`[telegram] Bot @${botInfo.username} is running (long polling)`);
+        },
+      });
+      console.warn("[telegram] Bot polling stopped — restarting in 3s...");
+    } catch (err) {
+      console.error("[telegram] Bot polling crashed — restarting in 3s:", err);
+    }
+    await sleep(3000);
+  }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isExpiredCallbackError(err: unknown): boolean {
+  if (err instanceof GrammyError) {
+    return err.error_code === 400 && /query is too old|query ID is invalid/i.test(err.description);
+  }
+  if (err && typeof err === "object" && "error" in err) {
+    const inner = (err as { error: unknown }).error;
+    return isExpiredCallbackError(inner);
+  }
+  return false;
+}
+
+async function safeAnswerCallback(
+  ctx: { answerCallbackQuery: (opts?: { text: string }) => Promise<boolean> },
+  text: string | undefined,
+): Promise<void> {
+  try {
+    if (text) {
+      await ctx.answerCallbackQuery({ text });
+    } else {
+      await ctx.answerCallbackQuery();
+    }
+  } catch (err) {
+    if (!isExpiredCallbackError(err)) {
+      console.error("[telegram] answerCallbackQuery failed:", err);
+    }
+  }
 }
