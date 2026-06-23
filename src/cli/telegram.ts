@@ -62,6 +62,8 @@ Telegram commands:
   /new                 Start a new agent session
   /status              Model, workdir, session id
   /stop                Abort current turn
+  /start               Welcome guide (first connect)
+  /help                Show commands and capabilities
   /build               Switch to Build mode (edit files, run shell)
   /plan                Switch to Plan mode (read-only)
   /boss [on|off]       Toggle or set boss orchestrator mode

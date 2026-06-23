@@ -91,6 +91,8 @@ agent skills list
 
 Chat with agent-dev from your phone via Telegram (OpenClaw-style). The gateway runs on your PC, uses long-polling (no public URL or port forwarding), and forwards DMs to the agent. Shell/git/exec approvals arrive as **Approve / Deny** inline buttons.
 
+On first connect, send `/start` (or any message) to receive a welcome guide with available commands and capabilities.
+
 ### Setup
 
 1. **Create a bot** — open [@BotFather](https://t.me/BotFather) in Telegram, run `/newbot`, save the token.
@@ -143,6 +145,8 @@ On Windows, run it in a dedicated terminal, or use Task Scheduler / [pm2](https:
 
 | Command | Description |
 |---------|-------------|
+| `/start` | Welcome guide — commands, tools, project path (first connect) |
+| `/help` | Show the welcome guide again |
 | `/whoami` | Show your numeric Telegram user ID |
 | `/new` | Start a new agent session |
 | `/status` | Model, workdir, session id, busy/idle |

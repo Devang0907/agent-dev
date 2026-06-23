@@ -6,6 +6,8 @@ import { loadTelegramConfig, isUserAllowed, type TelegramGatewayOptions } from "
 import {
   getSessionIdForChat,
   setSessionIdForChat,
+  hasWelcomedUser,
+  markUserWelcomed,
 } from "./persistence.js";
 import {
   TelegramSessionBridge,
@@ -22,8 +24,12 @@ import {
   parseBossArg,
   toggleBossMode,
 } from "./commands.js";
+import { formatWelcomeMessage } from "./welcome.js";
+import type { Context } from "grammy";
 
 const TELEGRAM_SLASH_COMMANDS = new Set([
+  "/start",
+  "/help",
   "/new",
   "/whoami",
   "/status",
@@ -92,6 +98,51 @@ export async function runTelegramGateway(cliOptions: TelegramGatewayOptions & { 
     return bridge;
   }
 
+  function welcomeText(chatId: number): string {
+    const bridge = getOrCreateBridge(chatId);
+    const model = bridge.session.getModel();
+    return formatWelcomeMessage({
+      workdir: config.workdir,
+      modelRef: `${model.provider}/${model.id}`,
+      agentMode: bridge.session.getAgentMode(),
+      boss: bridge.session.getOrchestratorMode() === "boss",
+    });
+  }
+
+  async function replyWelcome(ctx: Context, userId: number, markWelcomed = true): Promise<void> {
+    const chatId = ctx.chat?.id;
+    if (!chatId) return;
+    await ctx.reply(welcomeText(chatId));
+    if (markWelcomed) {
+      markUserWelcomed(userId);
+      logGateway(`Welcome guide sent to user ${userId}`);
+    }
+  }
+
+  bot.command("start", async (ctx) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+    logUserCommand(userId, "/start");
+
+    if (!isUserAllowed(userId, config.allowedUserIds)) {
+      await ctx.reply(
+        [
+          "Welcome to agent-dev!",
+          "",
+          `Your Telegram user ID: ${userId}`,
+          "",
+          "Add this ID to telegram.allowedUserIds in ~/.agent-dev/settings.json",
+          "(or set TELEGRAM_ALLOWED_USER_IDS), then restart the gateway.",
+          "",
+          "Then send /start again to see available commands.",
+        ].join("\n"),
+      );
+      return;
+    }
+
+    await replyWelcome(ctx, userId);
+  });
+
   bot.command("whoami", async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId) return;
@@ -111,6 +162,15 @@ export async function runTelegramGateway(cliOptions: TelegramGatewayOptions & { 
     }
 
     await next();
+  });
+
+  bot.command("help", async (ctx) => {
+    const chatId = ctx.chat?.id;
+    const userId = ctx.from?.id;
+    if (!chatId || !userId) return;
+
+    logUserCommand(userId, "/help");
+    await replyWelcome(ctx, userId, false);
   });
 
   bot.command("new", async (ctx) => {
@@ -312,6 +372,10 @@ export async function runTelegramGateway(cliOptions: TelegramGatewayOptions & { 
 
     const chatId = ctx.chat.id;
     const bridge = getOrCreateBridge(chatId);
+
+    if (!hasWelcomedUser(userId)) {
+      await replyWelcome(ctx, userId);
+    }
 
     if (bridge.session.isRunning()) {
       logUserMessage(userId, text);

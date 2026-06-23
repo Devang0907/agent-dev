@@ -1,5 +1,8 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
+import { join } from "node:path";
 import { CONFIG_DIR, TELEGRAM_SESSIONS_PATH } from "../../config/paths.js";
+
+export const TELEGRAM_WELCOMED_PATH = join(CONFIG_DIR, "telegram-welcomed.json");
 
 export interface TelegramSessionMap {
   [chatKey: string]: string;
@@ -37,4 +40,34 @@ export function clearSessionIdForChat(chatId: number): void {
   const map = loadTelegramSessionMap();
   delete map[chatKey(chatId)];
   saveTelegramSessionMap(map);
+}
+
+interface WelcomedStore {
+  userIds: number[];
+}
+
+function loadWelcomedStore(): WelcomedStore {
+  if (!existsSync(TELEGRAM_WELCOMED_PATH)) return { userIds: [] };
+  try {
+    const parsed = JSON.parse(readFileSync(TELEGRAM_WELCOMED_PATH, "utf-8")) as WelcomedStore;
+    return { userIds: Array.isArray(parsed.userIds) ? parsed.userIds : [] };
+  } catch {
+    return { userIds: [] };
+  }
+}
+
+function saveWelcomedStore(store: WelcomedStore): void {
+  mkdirSync(CONFIG_DIR, { recursive: true });
+  writeFileSync(TELEGRAM_WELCOMED_PATH, JSON.stringify(store, null, 2), "utf-8");
+}
+
+export function hasWelcomedUser(userId: number): boolean {
+  return loadWelcomedStore().userIds.includes(userId);
+}
+
+export function markUserWelcomed(userId: number): void {
+  const store = loadWelcomedStore();
+  if (store.userIds.includes(userId)) return;
+  store.userIds.push(userId);
+  saveWelcomedStore(store);
 }
