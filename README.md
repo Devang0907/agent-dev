@@ -100,7 +100,7 @@ On first connect, send `/start` (or any message) to receive a welcome guide with
 
 1. **Create a bot** — open [@BotFather](https://t.me/BotFather) in Telegram, run `/newbot`, save the token.
 
-2. **Configure** — add to `~/.agent-dev/settings.json`:
+2. **Configure** — use `/connect` in the TUI (recommended), or add to `~/.agent-dev/settings.json` manually:
 
 ```json
 {
@@ -118,6 +118,8 @@ Or use environment variables:
 export TELEGRAM_BOT_TOKEN=123456789:ABCdef...
 export TELEGRAM_ALLOWED_USER_IDS=987654321
 ```
+
+**TUI setup (`/connect`):** in the interactive agent, run `/connect` to open the gateway setup screen. Choose **Telegram**, paste your `botToken`, enter `allowedUserIds` as comma-separated numbers (e.g. `123456789`), then save. Values are written to `telegram.botToken` and `telegram.allowedUserIds` in `~/.agent-dev/settings.json`. More gateways can be added here later.
 
 3. **Find your Telegram user ID** — start the gateway, DM your bot, send `/whoami`. If the allowlist is empty, check the gateway console logs for `Rejected message from user <id>`.
 
@@ -208,6 +210,7 @@ Timing options the agent can set: `in_minutes` (e.g. 5), `daily_at` in 24h local
 | `/trace` | Show path to the latest worker trace log |
 | `/sessions` | Browse and load saved chat sessions |
 | `/settings` | Thinking level and API key status |
+| `/connect` | Configure gateway connection (Telegram bot token and allowed user IDs) |
 | `/skills` | Browse and install skills (Vercel CLI) |
 | `/skill <name>` | Load a skill for the current turn |
 | `/new` | Start a new session |

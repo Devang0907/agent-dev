@@ -1,6 +1,7 @@
 export const SLASH_COMMANDS = [
   { cmd: "/model", desc: "Select provider & model", aliases: ["/m"] as const },
   { cmd: "/settings", desc: "Thinking level & API keys" },
+  { cmd: "/connect", desc: "Configure gateway connection (Telegram)" },
   { cmd: "/build", desc: "Switch to Build mode (full tool access)" },
   { cmd: "/plan", desc: "Switch to Plan mode (read-only exploration)" },
   { cmd: "/boss", desc: "Toggle boss orchestrator mode" },

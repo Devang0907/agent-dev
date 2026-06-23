@@ -8,6 +8,7 @@ import { ModelSelector } from "./ModelSelector.js";
 import { ApiKeyPrompt } from "./ApiKeyPrompt.js";
 import { SettingsView } from "./SettingsView.js";
 import { SessionSelector } from "./SessionSelector.js";
+import { ConnectView } from "./ConnectView.js";
 import { hasProviderAuth, getDefaultModelForProvider } from "../providers/registry.js";
 import type { Model, ProviderId } from "../providers/types.js";
 import type { ChatMessage } from "../providers/types.js";
@@ -71,7 +72,7 @@ export interface DisplayMessage {
   toolName?: string;
 }
 
-type Overlay = "none" | "model" | "settings" | "skills" | "apiKey" | "commandApproval" | "sessions";
+type Overlay = "none" | "model" | "settings" | "connect" | "skills" | "apiKey" | "commandApproval" | "sessions";
 
 interface AppProps {
   session: AgentSession;
@@ -431,6 +432,10 @@ export function App({ session, workdir, onQuit }: AppProps) {
         setOverlay("settings");
         return;
       }
+      if (value === "/connect") {
+        setOverlay("connect");
+        return;
+      }
       if (value === "/build") {
         session.setAgentMode("build");
         return;
@@ -547,6 +552,18 @@ export function App({ session, workdir, onQuit }: AppProps) {
           }}
           onSetApiKey={(provider) => {
             openApiKeyPrompt(modelForProvider(provider, settings), "settings");
+          }}
+          onClose={() => setOverlay("none")}
+        />
+      ) : overlay === "connect" ? (
+        <ConnectView
+          theme={theme}
+          settings={settings}
+          viewportHeight={viewportHeight}
+          contentWidth={contentWidth}
+          onSave={(s) => {
+            session.updateSettings(s);
+            setSettings(s);
           }}
           onClose={() => setOverlay("none")}
         />
