@@ -14,6 +14,12 @@ export interface SkillsSettings {
   paths?: string[];
 }
 
+export interface TelegramSettings {
+  botToken?: string;
+  allowedUserIds?: number[];
+  workdir?: string;
+}
+
 export interface Settings {
   defaultProvider: ProviderId;
   defaultModel: string;
@@ -22,6 +28,7 @@ export interface Settings {
   orchestratorMode?: OrchestratorMode;
   apiKeys?: Partial<Record<ProviderId, string>>;
   skills?: SkillsSettings;
+  telegram?: TelegramSettings;
 }
 
 const DEFAULT_SETTINGS: Settings = {
@@ -58,6 +65,7 @@ export function loadSettings(): Settings {
       orchestratorMode: parseOrchestratorMode(parsed.orchestratorMode ?? DEFAULT_SETTINGS.orchestratorMode),
       apiKeys: parsed.apiKeys,
       skills: parsed.skills,
+      telegram: parsed.telegram,
     };
     if (migrated) saveSettings(settings);
     return settings;

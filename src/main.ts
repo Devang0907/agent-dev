@@ -5,6 +5,7 @@ import { SessionManager } from "./session/manager.js";
 import { AgentSession } from "./agent/session.js";
 import { parseArgs, printHelp } from "./cli/args.js";
 import { runSkillsCommand } from "./cli/skills.js";
+import { runTelegramCommand } from "./cli/telegram.js";
 import { runPrintMode } from "./modes/print-mode.js";
 import { App } from "./ui/App.js";
 
@@ -12,6 +13,11 @@ export async function main(): Promise<void> {
   if (process.argv[2] === "skills") {
     const code = await runSkillsCommand(process.argv.slice(3));
     process.exit(code);
+  }
+
+  if (process.argv[2] === "telegram") {
+    await runTelegramCommand(process.argv);
+    return;
   }
 
   const args = parseArgs(process.argv);

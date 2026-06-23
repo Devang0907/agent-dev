@@ -9,3 +9,4 @@ export const MEMORY_PATH = join(CONFIG_DIR, "memory.json");
 export const PLAN_PATH = join(CONFIG_DIR, "plan.json");
 export const MCP_CONFIG_PATH = join(CONFIG_DIR, "mcp.json");
 export const TRACES_DIR = join(CONFIG_DIR, "traces");
+export const TELEGRAM_SESSIONS_PATH = join(CONFIG_DIR, "telegram-sessions.json");

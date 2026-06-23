@@ -57,6 +57,9 @@ Usage:
   agent skills add vercel-labs/agent-skills
   agent skills list
 
+  agent telegram                 Telegram gateway (remote chat from phone)
+  agent telegram --workdir .     Set project directory for the agent
+
 Options:
   -p, --print          Print response and exit
   -c, --continue       Continue most recent session

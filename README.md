@@ -85,6 +85,63 @@ agent skills find react
 agent skills list
 ```
 
+## Telegram gateway
+
+Chat with agent-dev from your phone via Telegram (OpenClaw-style). The gateway runs on your PC, uses long-polling (no public URL or port forwarding), and forwards DMs to the agent. Shell/git/exec approvals arrive as **Approve / Deny** inline buttons.
+
+### Setup
+
+1. **Create a bot** — open [@BotFather](https://t.me/BotFather) in Telegram, run `/newbot`, save the token.
+
+2. **Configure** — add to `~/.agent-dev/settings.json`:
+
+```json
+{
+  "telegram": {
+    "botToken": "123456789:ABCdef...",
+    "allowedUserIds": [987654321],
+    "workdir": "D:/projects/MyRepo"
+  }
+}
+```
+
+Or use environment variables:
+
+```bash
+export TELEGRAM_BOT_TOKEN=123456789:ABCdef...
+export TELEGRAM_ALLOWED_USER_IDS=987654321
+```
+
+3. **Find your Telegram user ID** — start the gateway, DM your bot, send `/whoami`. If the allowlist is empty, check the gateway console logs for `Rejected message from user <id>`.
+
+4. **Add your ID** to `allowedUserIds`, then restart the gateway.
+
+### Run
+
+```bash
+npm run dev -- telegram --workdir D:/projects/MyRepo
+# or after build:
+agent telegram --workdir D:/projects/MyRepo
+agent telegram --boss --verbose
+```
+
+Keep the process running while you use the bot. On Windows, run it in a dedicated terminal, or use Task Scheduler / [pm2](https://pm2.keymetrics.io/) to keep it alive on login.
+
+### Telegram commands
+
+| Command | Description |
+|---------|-------------|
+| `/whoami` | Show your numeric Telegram user ID |
+| `/new` | Start a new agent session |
+| `/status` | Model, workdir, session id, busy/idle |
+| `/stop` | Abort the current turn |
+
+### Security
+
+- Only users in `allowedUserIds` can chat with the agent (except `/whoami` for setup).
+- The bot can run shell commands on your PC after you approve them — treat the bot token like a password.
+- Do not commit `settings.json` with tokens to git.
+
 ## Interactive commands
 
 | Command | Description |
@@ -250,6 +307,7 @@ All config lives under `~/.agent-dev/` (override with `AGENT_DEV_DIR`):
 | `plan.json` | Active task plan |
 | `mcp.json` | MCP server definitions |
 | `traces/<sessionId>/` | Boss worker trace logs (JSONL) |
+| `telegram-sessions.json` | Telegram chat → session id mapping |
 
 Example `settings.json`:
 
@@ -276,6 +334,8 @@ Set `orchestratorMode` to `"boss"` to enable boss mode by default.
 | `AGENT_DEV_DIR` | Config directory (default `~/.agent-dev`) |
 | `AGENT_MAX_TOOL_ROUNDS` | Max tool-call rounds per turn (default `50`) |
 | `AGENT_MAX_DELEGATIONS` | Max worker delegations per boss turn (default `10`) |
+| `TELEGRAM_BOT_TOKEN` | Telegram bot token (overrides settings) |
+| `TELEGRAM_ALLOWED_USER_IDS` | Comma-separated Telegram user IDs |
 
 ## Architecture
 
@@ -290,6 +350,8 @@ src/
 │   ├── session.ts           # Session state, events, boss routing
 │   ├── orchestrator/        # Boss prompt, workers, traces
 │   └── tools/               # Built-in tool implementations
+├── gateway/
+│   └── telegram/            # Telegram bot daemon (grammY)
 ├── providers/               # OpenAI, Groq, Gemini, OpenRouter
 ├── ui/                      # Ink TUI
 └── modes/print-mode.ts      # Headless / CI output
