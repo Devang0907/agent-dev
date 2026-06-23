@@ -7,7 +7,7 @@ import { PROVIDER_ENV_VARS, hasProviderAuth } from "../providers/registry.js";
 import { LeftBorder } from "./LeftBorder.js";
 
 const THINKING_LEVELS: ThinkingLevel[] = ["off", "minimal", "low", "medium", "high"];
-const PROVIDERS: ProviderId[] = ["openai", "groq", "gemini", "free"];
+const PROVIDERS: ProviderId[] = ["openai", "anthropic", "groq", "gemini", "free"];
 
 interface SettingsViewProps {
   theme: ThemeColors;

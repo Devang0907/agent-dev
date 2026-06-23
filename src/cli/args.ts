@@ -77,6 +77,7 @@ Commands (interactive):
 
 Environment:
   OPENAI_API_KEY       OpenAI (ChatGPT)
+  ANTHROPIC_API_KEY    Anthropic (Claude)
   GROQ_API_KEY         Groq
   GEMINI_API_KEY       Google Gemini
   OPENROUTER_API_KEY   Free models via OpenRouter

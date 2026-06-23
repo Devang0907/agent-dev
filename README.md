@@ -25,6 +25,7 @@ Set at least one API key:
 ```bash
 export OPENROUTER_API_KEY=sk-or-...   # Free models (default)
 export OPENAI_API_KEY=sk-...          # ChatGPT
+export ANTHROPIC_API_KEY=sk-ant-...   # Claude
 export GROQ_API_KEY=gsk_...           # Groq
 export GEMINI_API_KEY=...             # Google Gemini
 ```
@@ -35,12 +36,13 @@ Requires **Node.js 20+**.
 
 | Provider | Env var | Example models |
 |----------|---------|----------------|
-| OpenAI (ChatGPT) | `OPENAI_API_KEY` | `gpt-4o`, `gpt-4o-mini` |
-| Groq | `GROQ_API_KEY` | `llama-3.3-70b-versatile`, `openai/gpt-oss-120b` |
-| Google Gemini | `GEMINI_API_KEY` or `GOOGLE_API_KEY` | `gemini-2.0-flash`, `gemini-2.5-flash` |
+| OpenAI (ChatGPT) | `OPENAI_API_KEY` | `gpt-4o`, `gpt-4.1`, `o4-mini` |
+| Anthropic (Claude) | `ANTHROPIC_API_KEY` | `claude-sonnet-4-6`, `claude-opus-4-8`, `claude-haiku-4-5-20251001` |
+| Groq | `GROQ_API_KEY` | `llama-3.3-70b-versatile`, `llama-3.1-8b-instant` |
+| Google Gemini | `GEMINI_API_KEY` or `GOOGLE_API_KEY` | `gemini-2.5-pro`, `gemini-2.5-flash` |
 | Free (OpenRouter) | `OPENROUTER_API_KEY` | See [free models](#free-models-openrouter) below |
 
-Model refs use `provider/model-id`, e.g. `groq/llama-3.3-70b-versatile` or `free/deepseek/deepseek-r1:free`.
+Model refs use `provider/model-id`, e.g. `anthropic/claude-sonnet-4-6`, `openai/gpt-4.1`, or `free/deepseek/deepseek-r1:free`.
 
 ### Free models (OpenRouter)
 
@@ -346,6 +348,7 @@ Set `orchestratorMode` to `"boss"` to enable boss mode by default.
 |----------|-------------|
 | `OPENROUTER_API_KEY` | OpenRouter (free tier models) |
 | `OPENAI_API_KEY` | OpenAI |
+| `ANTHROPIC_API_KEY` | Anthropic (Claude) |
 | `GROQ_API_KEY` | Groq |
 | `GEMINI_API_KEY` / `GOOGLE_API_KEY` | Google Gemini |
 | `AGENT_DEV_DIR` | Config directory (default `~/.agent-dev`) |

@@ -1,4 +1,4 @@
-export type ProviderId = "openai" | "groq" | "gemini" | "free";
+export type ProviderId = "openai" | "anthropic" | "groq" | "gemini" | "free";
 
 export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high";
 

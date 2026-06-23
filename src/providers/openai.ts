@@ -10,6 +10,10 @@ export const BASE_URL = "https://api.openai.com/v1";
 export const MODELS: Model[] = [
   { provider: PROVIDER_ID, id: "gpt-4o", name: "GPT-4o" },
   { provider: PROVIDER_ID, id: "gpt-4o-mini", name: "GPT-4o Mini" },
+  { provider: PROVIDER_ID, id: "gpt-4.1", name: "GPT-4.1" },
+  { provider: PROVIDER_ID, id: "gpt-4.1-mini", name: "GPT-4.1 Mini" },
+  { provider: PROVIDER_ID, id: "o4-mini", name: "o4-mini" },
+  { provider: PROVIDER_ID, id: "o3-mini", name: "o3-mini" },
 ];
 
 export function getApiKey(settings?: Settings): string | undefined {

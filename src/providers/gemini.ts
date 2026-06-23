@@ -8,8 +8,9 @@ export const API_KEY_ENV_ALT = "GOOGLE_API_KEY";
 const BASE_URL = "https://generativelanguage.googleapis.com/v1beta";
 
 export const MODELS: Model[] = [
-  { provider: PROVIDER_ID, id: "gemini-2.0-flash", name: "Gemini 2.0 Flash" },
+  { provider: PROVIDER_ID, id: "gemini-2.5-pro", name: "Gemini 2.5 Pro" },
   { provider: PROVIDER_ID, id: "gemini-2.5-flash", name: "Gemini 2.5 Flash" },
+  { provider: PROVIDER_ID, id: "gemini-2.0-flash", name: "Gemini 2.0 Flash" },
 ];
 
 type GeminiPart =
