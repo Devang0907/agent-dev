@@ -27,7 +27,7 @@ export const WORKER_PROFILES: Record<WorkerId, WorkerProfile> = {
     id: "explore",
     name: "Explore",
     description: "Read-only codebase research",
-    tools: ["read", "grep", "git", "docs"],
+    tools: ["read", "grep", "git", "docs", "browser"],
     mode: "build",
     systemPrompt: WORKER_PROMPTS.explore,
   },

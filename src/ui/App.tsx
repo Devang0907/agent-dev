@@ -15,7 +15,8 @@ import type { ChatMessage } from "../providers/types.js";
 import { findModel } from "../config/models.js";
 import type { Settings } from "../config/settings.js";
 import { CommandApprovalPrompt } from "./CommandApprovalPrompt.js";
-import type { PermissionRequest } from "../agent/loop.js";
+import { BrowserInteractionPrompt } from "./BrowserInteractionPrompt.js";
+import type { PermissionRequest, InteractionRequest } from "../agent/loop.js";
 import { StartupBanner } from "./StartupBanner.js";
 import { getTheme } from "./theme.js";
 import { formatToolForDisplay } from "./format-tool.js";
@@ -72,7 +73,7 @@ export interface DisplayMessage {
   toolName?: string;
 }
 
-type Overlay = "none" | "model" | "settings" | "connect" | "skills" | "apiKey" | "commandApproval" | "sessions";
+type Overlay = "none" | "model" | "settings" | "connect" | "skills" | "apiKey" | "commandApproval" | "browserInteraction" | "sessions";
 
 interface AppProps {
   session: AgentSession;
@@ -111,6 +112,8 @@ export function App({ session, workdir, onQuit }: AppProps) {
   /** null = follow latest output */
   const [scrollOffset, setScrollOffset] = useState<number | null>(null);
   const [pendingCommand, setPendingCommand] = useState<PermissionRequest | null>(null);
+  const [pendingInteraction, setPendingInteraction] = useState<InteractionRequest | null>(null);
+  const [toolProgress, setToolProgress] = useState("");
   const [currentSessionId, setCurrentSessionId] = useState(session.getSessionId());
   const [sessionListRefresh, setSessionListRefresh] = useState(0);
   const streamingRef = useRef("");
@@ -238,8 +241,13 @@ export function App({ session, workdir, onQuit }: AppProps) {
             streamingRef.current = "";
             setStreamingText("");
           }
+          setToolProgress("");
+          break;
+        case "tool_progress":
+          setToolProgress(event.message);
           break;
         case "tool_result":
+          setToolProgress("");
           setDisplayMessages((prev) => [
             ...prev,
             toDisplayMessage("tool", formatToolForDisplay(event.name, event.result), event.name),
@@ -281,6 +289,8 @@ export function App({ session, workdir, onQuit }: AppProps) {
                 `${event.workerId}:${inner.toolCall.name}`,
               ),
             ]);
+          } else if (inner.type === "tool_progress") {
+            setToolProgress(inner.message);
           } else if (inner.type === "tool_result") {
             setDisplayMessages((prev) => [
               ...prev,
@@ -306,6 +316,7 @@ export function App({ session, workdir, onQuit }: AppProps) {
           }
           streamingRef.current = "";
           setStreamingText("");
+          setToolProgress("");
           setRunning(false);
           break;
         case "error": {
@@ -331,6 +342,10 @@ export function App({ session, workdir, onQuit }: AppProps) {
         case "permission_request":
           setPendingCommand(event.request);
           setOverlay("commandApproval");
+          break;
+        case "interaction_request":
+          setPendingInteraction(event.request);
+          setOverlay("browserInteraction");
           break;
         case "model_changed":
           setModel(event.model);
@@ -621,12 +636,25 @@ export function App({ session, workdir, onQuit }: AppProps) {
             }}
           />
         </Box>
+      ) : overlay === "browserInteraction" && pendingInteraction ? (
+        <Box height={viewportHeight} flexShrink={0} overflow="hidden" paddingX={2}>
+          <BrowserInteractionPrompt
+            theme={theme}
+            request={pendingInteraction}
+            onContinue={(value) => {
+              session.respondToInteraction(value);
+              setPendingInteraction(null);
+              setOverlay("none");
+            }}
+          />
+        </Box>
       ) : hasChat ? (
         <ChatView
           messages={displayMessages}
           theme={theme}
           model={model}
           streamingText={streamingText}
+          toolProgress={toolProgress}
           running={running}
           viewportHeight={viewportHeight}
           scrollTop={scrollTop}

@@ -162,6 +162,7 @@ export async function executeDelegate(args: {
           event.type === "message_start" ||
           event.type === "text_delta" ||
           event.type === "tool_call" ||
+          event.type === "tool_progress" ||
           event.type === "tool_result" ||
           event.type === "turn_end" ||
           event.type === "error"
@@ -177,6 +178,8 @@ export async function executeDelegate(args: {
               runId,
             })
         : undefined,
+      onInteractionRequest: ctx.onInteractionRequest,
+      sessionId: ctx.sessionId,
     });
 
     const extracted = extractWorkerSummary(newMessages);

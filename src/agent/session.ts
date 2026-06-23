@@ -5,7 +5,7 @@ import { findModel } from "../config/models.js";
 import { setDefaultModel, saveSettings, setAgentMode, setOrchestratorMode } from "../config/settings.js";
 import type { OrchestratorMode } from "../config/settings.js";
 import { getAvailableModels, getDefaultModelForProvider } from "../providers/registry.js";
-import { runAgentLoop, type AgentEvent, type PermissionRequest } from "./loop.js";
+import { runAgentLoop, type AgentEvent, type PermissionRequest, type InteractionRequest } from "./loop.js";
 import { resolveSkillCommand } from "./skills.js";
 import type { AgentMode } from "./mode.js";
 import { buildSwitchReminder } from "./mode.js";
@@ -15,6 +15,7 @@ import {
   setDelegationContext,
   MAX_DELEGATIONS_PER_TURN,
 } from "./orchestrator/context.js";
+import { closeBrowserSession } from "./tools/browser/session.js";
 import { SessionManager } from "../session/manager.js";
 import { generateSessionTitle, fallbackTitle } from "../session/title.js";
 
@@ -25,7 +26,8 @@ export type SessionEvent =
   | { type: "agent_mode_changed"; mode: AgentMode }
   | { type: "orchestrator_mode_changed"; mode: OrchestratorMode }
   | { type: "session_title"; title: string }
-  | { type: "permission_request"; request: PermissionRequest };
+  | { type: "permission_request"; request: PermissionRequest }
+  | { type: "interaction_request"; request: InteractionRequest };
 
 export class AgentSession extends EventEmitter {
   private messages: ChatMessage[] = [];
@@ -36,6 +38,7 @@ export class AgentSession extends EventEmitter {
   private abortController?: AbortController;
   private running = false;
   private pendingPermission?: (approved: boolean) => void;
+  private pendingInteraction?: (value: string | null) => void;
   private lastLoopMode: AgentMode = "build";
 
   constructor(
@@ -111,6 +114,7 @@ export class AgentSession extends EventEmitter {
         signal: this.abortController?.signal,
         onEvent: (event) => this.emit("event", event),
         onPermissionRequest: (request) => this.requestCommandPermission(request),
+        onInteractionRequest: (request) => this.requestInteraction(request),
         delegationCount: 0,
         maxDelegations: MAX_DELEGATIONS_PER_TURN,
       });
@@ -129,6 +133,8 @@ export class AgentSession extends EventEmitter {
         signal: this.abortController?.signal,
         onEvent: (event) => this.emit("event", event),
         onPermissionRequest: (request) => this.requestCommandPermission(request),
+        onInteractionRequest: (request) => this.requestInteraction(request),
+        sessionId: this.getSessionId(),
       });
     } finally {
       if (isBoss) setDelegationContext(null);
@@ -182,10 +188,16 @@ export class AgentSession extends EventEmitter {
   abort(): void {
     this.abortController?.abort();
     this.resolvePermission(false);
+    this.resolveInteraction(null);
+    void closeBrowserSession(this.getSessionId());
   }
 
   respondToPermission(approved: boolean): void {
     this.resolvePermission(approved);
+  }
+
+  respondToInteraction(value?: string): void {
+    this.resolveInteraction(value ?? null);
   }
 
   private resolvePermission(approved: boolean): void {
@@ -201,6 +213,21 @@ export class AgentSession extends EventEmitter {
       this.pendingPermission = resolve;
       this.emit("event", { type: "permission_request", request } satisfies SessionEvent);
     });
+  }
+
+  private requestInteraction(request: InteractionRequest): Promise<string | null> {
+    return new Promise((resolve) => {
+      this.pendingInteraction = resolve;
+      this.emit("event", { type: "interaction_request", request } satisfies SessionEvent);
+    });
+  }
+
+  private resolveInteraction(value: string | null): void {
+    const resolve = this.pendingInteraction;
+    if (resolve) {
+      this.pendingInteraction = undefined;
+      resolve(value);
+    }
   }
 
   async prompt(content: string): Promise<void> {

@@ -20,6 +20,12 @@ export interface TelegramSettings {
   workdir?: string;
 }
 
+export interface BrowserSettings {
+  headless?: boolean;
+  actionTimeoutMs?: number;
+  profileDir?: string;
+}
+
 export interface Settings {
   defaultProvider: ProviderId;
   defaultModel: string;
@@ -29,6 +35,7 @@ export interface Settings {
   apiKeys?: Partial<Record<ProviderId, string>>;
   skills?: SkillsSettings;
   telegram?: TelegramSettings;
+  browser?: BrowserSettings;
 }
 
 const DEFAULT_SETTINGS: Settings = {
@@ -66,6 +73,7 @@ export function loadSettings(): Settings {
       apiKeys: parsed.apiKeys,
       skills: parsed.skills,
       telegram: parsed.telegram,
+      browser: parsed.browser,
     };
     if (migrated) saveSettings(settings);
     return settings;

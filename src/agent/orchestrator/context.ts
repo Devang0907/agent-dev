@@ -1,6 +1,6 @@
 import type { Model } from "../../providers/types.js";
 import type { Settings } from "../../config/settings.js";
-import type { AgentEvent, PermissionRequest } from "../loop.js";
+import type { AgentEvent, PermissionRequest, InteractionRequest } from "../loop.js";
 
 export interface DelegationContext {
   sessionId: string;
@@ -10,6 +10,7 @@ export interface DelegationContext {
   signal?: AbortSignal;
   onEvent: (event: AgentEvent) => void;
   onPermissionRequest?: (request: PermissionRequest) => Promise<boolean>;
+  onInteractionRequest?: (request: InteractionRequest) => Promise<string | null>;
   delegationCount: number;
   maxDelegations: number;
 }

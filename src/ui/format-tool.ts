@@ -37,6 +37,13 @@ export function formatToolForDisplay(toolName: string, result: string): string {
   if (toolName === "mcp") {
     return result.startsWith("Error:") ? result.split("\n")[0] ?? result : "mcp call";
   }
+  if (toolName === "browser") {
+    if (result.startsWith("Error:")) return result.split("\n")[0] ?? result;
+    const url = result.match(/https?:\/\/[^\s)]+/)?.[0];
+    if (url) return `browser · ${url.length > 50 ? url.slice(0, 50) + "…" : url}`;
+    const first = result.split("\n")[0] ?? result;
+    return first.length > 80 ? first.slice(0, 80) + "…" : first;
+  }
   if (toolName === "read") {
     return result.startsWith("Error:") ? result : "read file";
   }

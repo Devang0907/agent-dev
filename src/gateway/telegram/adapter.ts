@@ -1,7 +1,7 @@
 import type { Api, Context } from "grammy";
 import type { AgentSession, SessionEvent } from "../../agent/session.js";
 import type { CoreAgentEvent } from "../../agent/loop.js";
-import type { PermissionRequest } from "../../agent/loop.js";
+import type { PermissionRequest, InteractionRequest } from "../../agent/loop.js";
 import type { ToolCall } from "../../providers/types.js";
 import { chunkMessage, formatPermissionMessage, formatToolStatus, stripMalformedToolText, truncate } from "./format.js";
 import { setScheduleContext } from "../../agent/tools/schedule-context.js";
@@ -27,6 +27,7 @@ function isCoreAgentEvent(event: SessionEvent): event is CoreAgentEvent {
     event.type === "message_start" ||
     event.type === "text_delta" ||
     event.type === "tool_call" ||
+    event.type === "tool_progress" ||
     event.type === "tool_result" ||
     event.type === "turn_end" ||
     event.type === "error"
@@ -37,7 +38,9 @@ export class TelegramSessionBridge {
   private textBuffer = "";
   private activeWorker: { runId: string; workerId: string } | null = null;
   private pendingApprovalId?: string;
+  private pendingInteractionId?: string;
   private approvalCounter = 0;
+  private interactionCounter = 0;
   private agentLineStarted = false;
 
   constructor(
@@ -63,12 +66,21 @@ export class TelegramSessionBridge {
         this.session.respondToPermission(false);
         void this.sendMessage("Approval UI failed — command denied. Try again.");
       }
+      if (event.type === "interaction_request") {
+        this.pendingInteractionId = undefined;
+        this.session.respondToInteraction();
+      }
     });
   };
 
   private async processEvent(event: SessionEvent): Promise<void> {
     if (event.type === "permission_request") {
       await this.handlePermissionRequest(event.request);
+      return;
+    }
+
+    if (event.type === "interaction_request") {
+      await this.handleInteractionRequest(event.request);
       return;
     }
 
@@ -93,6 +105,8 @@ export class TelegramSessionBridge {
         if (this.verbose) {
           await this.sendStatus(`[${event.workerId}] tool: ${inner.toolCall.name}`);
         }
+      } else if (inner.type === "tool_progress" && this.verbose) {
+        await this.sendStatus(truncate(inner.message, 300));
       } else if (inner.type === "tool_result" && this.verbose) {
         logToolResult(inner.result, event.workerId);
       }
@@ -128,6 +142,13 @@ export class TelegramSessionBridge {
       return;
     }
 
+    if (event.type === "tool_progress" && !this.activeWorker) {
+      if (this.verbose) {
+        await this.sendStatus(truncate(event.message, 300));
+      }
+      return;
+    }
+
     if (event.type === "tool_result" && !this.activeWorker) {
       logToolResult(event.result);
       if (event.result.toLowerCase().includes("error") || event.result.startsWith("Error")) {
@@ -152,6 +173,41 @@ export class TelegramSessionBridge {
         this.agentLineStarted = false;
       }
       await this.flushTextBuffer();
+    }
+  }
+
+  private async handleInteractionRequest(request: InteractionRequest): Promise<void> {
+    const interactionId = String(++this.interactionCounter);
+    this.pendingInteractionId = interactionId;
+
+    const text =
+      request.kind === "manual_step"
+        ? `${request.reason}\n\nComplete the step in your browser, then tap Continue.`
+        : `${request.reason}\n\nReply with your ${request.placeholder ?? "input"} in chat after tapping Continue.`;
+
+    try {
+      await this.api.sendMessage(this.chatId, truncate(text, 3500), {
+        reply_markup: {
+          inline_keyboard: [[{ text: "Continue", callback_data: `browser_continue:${interactionId}` }]],
+        },
+      });
+    } catch (err) {
+      console.error("[telegram] Failed to send interaction request:", err);
+      this.pendingInteractionId = undefined;
+      this.session.respondToInteraction();
+    }
+  }
+
+  async handleBrowserContinueCallback(interactionId: string, messageId: number): Promise<void> {
+    if (this.pendingInteractionId !== interactionId) return;
+    this.pendingInteractionId = undefined;
+    this.session.respondToInteraction();
+    try {
+      await this.api.editMessageText(this.chatId, messageId, "Continuing…", {
+        reply_markup: { inline_keyboard: [] },
+      });
+    } catch {
+      // ignore
     }
   }
 
@@ -252,6 +308,14 @@ export function parseApprovalCallback(data: string): { action: "approve" | "deny
   }
   if (data.startsWith(DENY_PREFIX)) {
     return { action: "deny", id: data.slice(DENY_PREFIX.length) };
+  }
+  return null;
+}
+
+export function parseBrowserContinueCallback(data: string): { id: string } | null {
+  const prefix = "browser_continue:";
+  if (data.startsWith(prefix)) {
+    return { id: data.slice(prefix.length) };
   }
   return null;
 }

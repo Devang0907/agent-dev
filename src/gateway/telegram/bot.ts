@@ -12,6 +12,7 @@ import {
 import {
   TelegramSessionBridge,
   parseApprovalCallback,
+  parseBrowserContinueCallback,
   sendBusyReply,
 } from "./adapter.js";
 import { logGateway, logUserCommand, logUserMessage } from "./logger.js";
@@ -366,6 +367,25 @@ export async function runTelegramGateway(cliOptions: TelegramGatewayOptions & { 
 
   bot.on("callback_query:data", async (ctx) => {
     const data = ctx.callbackQuery.data;
+
+    const browserContinue = parseBrowserContinueCallback(data);
+    if (browserContinue) {
+      const chatId = ctx.chat?.id;
+      if (!chatId) {
+        await safeAnswerCallback(ctx, undefined);
+        return;
+      }
+      const bridge = bridges.get(chatId);
+      const messageId = ctx.callbackQuery.message?.message_id;
+      if (!bridge || !messageId) {
+        await safeAnswerCallback(ctx, "Session expired.");
+        return;
+      }
+      await safeAnswerCallback(ctx, "Continuing");
+      void bridge.handleBrowserContinueCallback(browserContinue.id, messageId);
+      return;
+    }
+
     const parsed = parseApprovalCallback(data);
     if (!parsed) {
       await safeAnswerCallback(ctx, undefined);

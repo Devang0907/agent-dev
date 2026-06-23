@@ -25,6 +25,8 @@ const TOOL_SNIPPETS: Record<string, string> = {
   mcp: "Call external MCP tools; mutations need approval",
   skill: "Load a specialized workflow skill by name",
   schedule: "Schedule Telegram reminders and daily recurring tasks",
+  browser:
+    "Control a real browser: navigate, click, type, extract, screenshot. Inspect with getPageContent first.",
 };
 
 const GUIDELINES = [
@@ -36,8 +38,11 @@ const GUIDELINES = [
   "Use write or edit once with the full content — do not call the same tool repeatedly with identical arguments.",
   "Use docs for library/API questions; use web_search for news, releases, and current events.",
   "Use schedule for Telegram reminders (in_minutes) and daily tasks (daily_at + kind=task) — e.g. news every morning.",
+  "Use the browser tool for web tasks: always getPageContent before clicking unfamiliar pages.",
+  "Before purchases, bookings, or deletions in the browser, set requiresApproval: true and use waitForUser for CAPTCHA/OTP/payment.",
+  "Never enter credit card numbers via the browser tool — ask the user to complete payment manually.",
   "Use the skill tool when a listed skill matches the task.",
-  "git write actions, bash, exec, database mutations, and mcp call_tool require user approval — proceed only after approval.",
+  "git write actions, bash, exec, database mutations, mcp call_tool, and destructive browser actions require user approval — proceed only after approval.",
   "When the task is complete, reply briefly to confirm what was done.",
 ];
 

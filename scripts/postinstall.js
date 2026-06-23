@@ -30,4 +30,5 @@ if (!isGlobalInstall()) {
 console.log("");
 console.log("  @devang0907/agent-dev installed successfully.");
 console.log("  Run `agent` to start the coding agent.");
+console.log("  Browser automation: run `npx playwright install chromium` once to download the browser.");
 console.log("");

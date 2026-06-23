@@ -1,4 +1,6 @@
 import { resolve } from "node:path";
+import { BROWSER_PLAN_ALLOWED_ACTIONS, BROWSER_PLAN_BLOCKED_ACTIONS } from "./tools/browser/types.js";
+import type { BrowserAction } from "./tools/browser/types.js";
 
 export type AgentMode = "build" | "plan";
 
@@ -66,6 +68,16 @@ export function isToolBlockedInPlanMode(
     const writeActions = new Set(["commit", "add", "reset", "checkout", "merge", "rebase", "push", "pull", "stash", "tag"]);
     if (writeActions.has(action)) {
       return "Plan mode: git write actions are not allowed. Use /build in Telegram or Tab in terminal to switch to Build mode.";
+    }
+  }
+
+  if (name === "browser") {
+    const action = String(args.action ?? "") as BrowserAction;
+    if (BROWSER_PLAN_BLOCKED_ACTIONS.has(action)) {
+      return "Plan mode: browser form interactions are not allowed (click, type, select, check, close). Use read-only actions or switch to Build mode.";
+    }
+    if (!BROWSER_PLAN_ALLOWED_ACTIONS.has(action)) {
+      return "Plan mode: this browser action is not allowed. Switch to Build mode for full browser control.";
     }
   }
 

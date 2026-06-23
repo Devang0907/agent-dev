@@ -254,7 +254,7 @@ User → Boss (plan + delegate)
 
 | Worker | Role | Tools |
 |--------|------|-------|
-| `explore` | Read-only codebase research | read, grep, git, docs |
+| `explore` | Read-only codebase research | read, grep, git, docs, browser |
 | `implement` | Focused code changes | read, write, edit, diff, grep, verify |
 | `shell` | Commands and tests | bash, exec, verify |
 | `plan` | Planning documents | plan, read, grep |
@@ -265,7 +265,7 @@ Boss mode uses the same model you select in `/model`. Workers run in isolated co
 
 ## Tools
 
-The agent has **18 built-in tools** (`delegate` is boss-only; 17 are available in normal mode):
+The agent has **19 built-in tools** (`delegate` is boss-only; 18 are available in normal mode):
 
 | Tool | Description |
 |------|-------------|
@@ -287,8 +287,47 @@ The agent has **18 built-in tools** (`delegate` is boss-only; 17 are available i
 | `mcp` | Call tools from MCP servers (see below) |
 | `skill` | Load a skill by name from `available_skills` |
 | `schedule` | Schedule Telegram reminders and daily recurring tasks (gateway must be running) |
+| `browser` | Control a real Chromium browser (navigate, click, extract, screenshot) |
 
-File operations are restricted to the current working directory. Shell commands, git writes, SQL mutations, and MCP tool calls prompt for approval (`y` / `n`). In boss mode, approval prompts show which worker requested the action.
+File operations are restricted to the current working directory. Shell commands, git writes, SQL mutations, MCP tool calls, and destructive browser actions prompt for approval (`y` / `n`). In boss mode, approval prompts show which worker requested the action.
+
+### Browser automation
+
+Requires a one-time browser install:
+
+```bash
+npx playwright install chromium
+```
+
+The browser runs **visible by default** so you can watch the agent. Session state (tabs, cookies) persists across tool calls within a chat session.
+
+| Action | Description |
+|--------|-------------|
+| `open` | Launch browser and open URL in a new tab |
+| `goto` | Navigate active tab to URL |
+| `click` / `type` / `select` / `check` | Interact with page elements (CSS selectors) |
+| `waitFor` | Wait for selector to appear |
+| `getPageContent` | Inspect page — URL, text, interactive elements |
+| `extract` | Read text/value from a selector |
+| `screenshot` | Save PNG to `~/.agent-dev/screenshots/` |
+| `listTabs` / `switchTab` / `newTab` / `closeTab` | Multi-tab control |
+| `waitForUser` | Pause for CAPTCHA, OTP, or manual payment |
+| `close` | Close browser |
+
+Optional settings in `~/.agent-dev/settings.json`:
+
+```json
+{
+  "browser": {
+    "headless": false,
+    "actionTimeoutMs": 30000
+  }
+}
+```
+
+**Safety:** Purchases, booking confirmations, and payment steps require approval or manual user action. The agent pauses automatically on CAPTCHA/OTP/payment fields. Load the `browser-automation` skill for multi-step workflows.
+
+**Plan mode:** Read-only browser actions only (`goto`, `extract`, `getPageContent`, `screenshot`). Form interactions require Build mode.
 
 ### MCP configuration
 

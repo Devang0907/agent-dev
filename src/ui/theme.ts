@@ -46,4 +46,5 @@ export const TOOL_ICONS: Record<string, string> = {
   database: "▣",
   verify: "✓",
   mcp: "⬡",
+  browser: "🌐",
 };

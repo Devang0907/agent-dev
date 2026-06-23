@@ -16,6 +16,7 @@ export function buildChatLines(
     width: number;
     model: Model;
     streamingText?: string;
+    toolProgress?: string;
     running?: boolean;
   },
 ): ChatLine[] {
@@ -68,6 +69,15 @@ export function buildChatLines(
       lines.push({ id: `stream-${i}`, text: `  ${line}`, tone: "text" });
     }
     lines.push({ id: "stream-spin", text: "  …", tone: "textMuted" });
+  } else if (opts.toolProgress) {
+    const prefix = `  ${TOOL_ICONS.browser ?? "🌐"} `;
+    for (const [i, line] of wrapText(opts.toolProgress, Math.max(10, opts.width - prefix.length)).entries()) {
+      lines.push({
+        id: `tool-progress-${i}`,
+        text: `${i === 0 ? prefix : "     "}${line}`,
+        tone: "textMuted",
+      });
+    }
   } else if (opts.running && messages.length > 0) {
     lines.push({ id: "working", text: "  working…", tone: "textMuted" });
   }

@@ -27,6 +27,13 @@ import { verifyTool, executeVerify } from "./verify.js";
 import { mcpTool, executeMcp, formatMcpPermissionCommand } from "./mcp.js";
 import { skillTool, executeSkill } from "./skill.js";
 import { scheduleTool, executeSchedule } from "./schedule.js";
+import { browserTool, executeBrowser } from "./browser/index.js";
+import {
+  isDestructiveBrowserAction,
+  formatBrowserPermissionCommand,
+} from "./browser/detectors.js";
+import { BROWSER_INTERACTION_ACTIONS } from "./browser/types.js";
+import type { BrowserToolArgs } from "./browser/types.js";
 
 export interface AgentTool {
   definition: ToolDefinition;
@@ -52,6 +59,7 @@ export const BUILTIN_TOOLS: AgentTool[] = [
   { definition: mcpTool, execute: (args) => executeMcp(args as { action: string; server?: string; tool?: string; arguments?: Record<string, unknown> }) },
   { definition: skillTool, execute: (args) => executeSkill(args as { name: string }) },
   { definition: scheduleTool, execute: (args) => executeSchedule(args as Parameters<typeof executeSchedule>[0]) },
+  { definition: browserTool, execute: (args) => executeBrowser(args as unknown as BrowserToolArgs) },
 ];
 
 /** @deprecated Use needsToolPermission instead */
@@ -62,6 +70,12 @@ export function needsToolPermission(name: string, args: Record<string, unknown>)
   if (name === "git") return isGitWriteAction(String(args.action ?? ""));
   if (name === "database") return !isSelectOnlyQuery(String(args.query ?? ""));
   if (name === "mcp") return String(args.action ?? "").toLowerCase() === "call_tool";
+  if (name === "browser") {
+    const action = String(args.action ?? "");
+    if (BROWSER_INTERACTION_ACTIONS.has(action as BrowserToolArgs["action"])) {
+      return args.requiresApproval === true || isDestructiveBrowserAction(args as unknown as BrowserToolArgs);
+    }
+  }
   return false;
 }
 
@@ -75,6 +89,7 @@ export function formatPermissionCommand(name: string, args: Record<string, unkno
   if (name === "git") return formatGitPermissionCommand(args);
   if (name === "database") return formatDatabasePermissionCommand(args);
   if (name === "mcp") return formatMcpPermissionCommand(args);
+  if (name === "browser") return formatBrowserPermissionCommand(args as unknown as BrowserToolArgs);
   return name;
 }
 

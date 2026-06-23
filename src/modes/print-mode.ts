@@ -3,7 +3,7 @@ import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 import type { AgentSession, SessionEvent } from "../agent/session.js";
 import { formatSkillsListMessage, resolveSkillCommand } from "../agent/skills.js";
-import type { CoreAgentEvent } from "../agent/loop.js";
+import type { CoreAgentEvent, InteractionRequest } from "../agent/loop.js";
 
 async function promptCommandApproval(
   request: { command: string; workerId?: string; runId?: string },
@@ -24,11 +24,35 @@ async function promptCommandApproval(
   }
 }
 
+async function promptBrowserInteraction(request: InteractionRequest): Promise<string | null> {
+  if (request.kind === "manual_step") {
+    console.log(chalk.cyan(`\n${request.reason}`));
+    console.log(chalk.gray("Complete the step in the browser, then press Enter to continue..."));
+    const rl = createInterface({ input, output });
+    try {
+      await rl.question("");
+      return null;
+    } finally {
+      rl.close();
+    }
+  }
+
+  console.log(chalk.cyan(`\n${request.reason}`));
+  const rl = createInterface({ input, output });
+  try {
+    const answer = await rl.question(chalk.gray(`${request.placeholder ?? "Enter value"}: `));
+    return answer.trim() || null;
+  } finally {
+    rl.close();
+  }
+}
+
 function isCoreAgentEvent(event: SessionEvent): event is CoreAgentEvent {
   return (
     event.type === "message_start" ||
     event.type === "text_delta" ||
     event.type === "tool_call" ||
+    event.type === "tool_progress" ||
     event.type === "tool_result" ||
     event.type === "turn_end" ||
     event.type === "error"
@@ -66,6 +90,13 @@ export async function runPrintMode(session: AgentSession, prompt: string): Promi
       })();
       return;
     }
+    if (event.type === "interaction_request") {
+      void (async () => {
+        const value = await promptBrowserInteraction(event.request);
+        session.respondToInteraction(value ?? undefined);
+      })();
+      return;
+    }
     if (event.type === "delegation_start") {
       activeWorker = { runId: event.runId, workerId: event.workerId };
       console.log(
@@ -89,6 +120,8 @@ export async function runPrintMode(session: AgentSession, prompt: string): Promi
       const prefix = chalk.gray(`[${event.workerId}#${event.runId}] `);
       if (inner.type === "tool_call") {
         console.log(prefix + chalk.yellow(`tool: ${inner.toolCall.name}`));
+      } else if (inner.type === "tool_progress") {
+        console.log(prefix + chalk.gray(inner.message));
       } else if (inner.type === "tool_result") {
         console.log(prefix + chalk.gray(inner.result.slice(0, 500)));
       }
@@ -100,6 +133,8 @@ export async function runPrintMode(session: AgentSession, prompt: string): Promi
       process.stdout.write(event.delta);
     } else if (event.type === "tool_call" && !activeWorker) {
       console.log(chalk.yellow(`\n[tool: ${event.toolCall.name}]`));
+    } else if (event.type === "tool_progress" && !activeWorker) {
+      console.log(chalk.gray(event.message));
     } else if (event.type === "tool_result" && !activeWorker) {
       console.log(chalk.gray(event.result.slice(0, 500)));
     } else if (event.type === "error") {

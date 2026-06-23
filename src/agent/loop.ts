@@ -10,12 +10,20 @@ import type { ChatMessage, Model, ToolCall } from "../providers/types.js";
 import type { Settings } from "../config/settings.js";
 import { getToolDefinitions, executeTool, needsToolPermission, formatPermissionCommand, checkPlanModeToolBlock } from "./tools/index.js";
 import { setSkillContext } from "./skills.js";
+import { setBrowserContext } from "./tools/browser-context.js";
 import type { AgentMode } from "./mode.js";
 import {
   buildDefaultSystemPrompt,
   buildSystemPrompt,
   systemPromptForModel,
 } from "./system-prompt.js";
+
+export interface InteractionRequest {
+  toolCallId: string;
+  kind: "manual_step" | "user_input";
+  reason: string;
+  placeholder?: string;
+}
 
 export interface PermissionRequest {
   toolCallId: string;
@@ -35,6 +43,7 @@ export type CoreAgentEvent =
   | { type: "message_start"; role: "assistant" }
   | { type: "text_delta"; delta: string }
   | { type: "tool_call"; toolCall: ToolCall }
+  | { type: "tool_progress"; toolCallId: string; name: string; message: string }
   | { type: "tool_result"; toolCallId: string; name: string; result: string }
   | { type: "turn_end" }
   | { type: "error"; message: string };
@@ -64,6 +73,8 @@ export interface AgentLoopOptions {
   signal?: AbortSignal;
   onEvent: (event: AgentEvent) => void;
   onPermissionRequest?: (request: PermissionRequest) => Promise<boolean>;
+  onInteractionRequest?: (request: InteractionRequest) => Promise<string | null>;
+  sessionId?: string;
 }
 
 function isToolUseFailedError(message: string): boolean {
@@ -118,6 +129,9 @@ async function runToolBatch(
   callCounts: Map<string, number>,
   onEvent: (event: AgentEvent) => void,
   onPermissionRequest?: (request: PermissionRequest) => Promise<boolean>,
+  onInteractionRequest?: (request: InteractionRequest) => Promise<string | null>,
+  sessionId?: string,
+  settings?: Settings,
 ): Promise<boolean> {
   let stopAfterBatch = false;
 
@@ -152,6 +166,43 @@ async function runToolBatch(
     let result: string;
     const needsPermission = needsToolPermission(tc.name, args);
 
+    const runExecute = async (): Promise<string> => {
+      if (tc.name === "browser" && sessionId) {
+        setBrowserContext({
+          sessionId,
+          toolCallId: tc.id,
+          settings: settings?.browser ?? {},
+          onProgress: (message) => {
+            onEvent({ type: "tool_progress", toolCallId: tc.id, name: tc.name, message });
+          },
+          requestUserStep: async (reason) => {
+            if (onInteractionRequest) {
+              await onInteractionRequest({
+                toolCallId: tc.id,
+                kind: "manual_step",
+                reason,
+              });
+            }
+          },
+          requestUserInput: async (reason, placeholder) => {
+            if (!onInteractionRequest) return null;
+            return onInteractionRequest({
+              toolCallId: tc.id,
+              kind: "user_input",
+              reason,
+              placeholder,
+            });
+          },
+        });
+        try {
+          return await executeTool(tc.name, args, workdir);
+        } finally {
+          setBrowserContext(null);
+        }
+      }
+      return executeTool(tc.name, args, workdir);
+    };
+
     if (needsPermission && onPermissionRequest) {
       const approved = await onPermissionRequest({
         toolCallId: tc.id,
@@ -159,13 +210,11 @@ async function runToolBatch(
         args,
         command: formatPermissionCommand(tc.name, args),
       });
-      result = approved
-        ? await executeTool(tc.name, args, workdir)
-        : "Command execution denied by user.";
+      result = approved ? await runExecute() : "Command execution denied by user.";
     } else if (needsPermission) {
       result = "Command execution denied — permission handler not available.";
     } else {
-      result = await executeTool(tc.name, args, workdir);
+      result = await runExecute();
     }
 
     onEvent({ type: "tool_result", toolCallId: tc.id, name: tc.name, result });
@@ -269,6 +318,8 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<ChatMessa
     signal,
     onEvent,
     onPermissionRequest,
+    onInteractionRequest,
+    sessionId,
   } = options;
 
   const context = [...messages];
@@ -354,6 +405,9 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<ChatMessa
       callCounts,
       onEvent,
       onPermissionRequest,
+      onInteractionRequest,
+      sessionId,
+      settings,
     );
 
     if (stopAfterBatch) {

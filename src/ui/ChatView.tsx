@@ -11,6 +11,7 @@ interface ChatViewProps {
   theme: ThemeColors;
   model: Model;
   streamingText?: string;
+  toolProgress?: string;
   running?: boolean;
   viewportHeight: number;
   scrollTop: number;
@@ -22,6 +23,7 @@ export function ChatView({
   theme,
   model,
   streamingText,
+  toolProgress,
   running,
   viewportHeight,
   scrollTop,
@@ -33,9 +35,10 @@ export function ChatView({
         width: contentWidth,
         model,
         streamingText,
+        toolProgress,
         running,
       }),
-    [messages, contentWidth, model, streamingText, running],
+    [messages, contentWidth, model, streamingText, toolProgress, running],
   );
 
   if (lines.length === 0) {
