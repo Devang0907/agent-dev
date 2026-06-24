@@ -14,7 +14,7 @@ const TOOL_SNIPPETS: Record<string, string> = {
   diff: "Preview or show a diff before applying changes",
   grep: "Search the codebase by regex pattern",
   git: "Run read-only git commands; write actions need approval",
-  bash: "Run shell commands; requires user approval",
+  bash: "Run shell commands on the user's real machine (requires approval). Dev servers (npm run dev, next dev) start in background and return a localhost URL.",
   exec: "Alias for bash with cmd array format; requires approval",
   web_search: "Search the web for current events and documentation",
   docs: "Look up library/API documentation",
@@ -47,6 +47,14 @@ const GUIDELINES = [
   "When the task is complete, reply briefly to confirm what was done.",
 ];
 
+const EXECUTION_RULES = [
+  "You run on the user's real local machine with full shell access. There is NO sandbox, container, or restricted execution environment.",
+  "Never claim you cannot run commands, start servers, or execute code. Always use the bash tool when the user asks to run, start, or test an app.",
+  "To run web apps (Next.js, Vite, React, etc.): cd into the project if needed, then bash with npm run dev, npm start, or next dev. The harness starts dev servers in the background and returns a localhost URL.",
+  "You do not need to open a browser window yourself — start the dev server via bash and tell the user the URL to open in their browser.",
+  "Never refuse to run dev servers or substitute instructions for the user to run locally — you ARE running locally. Use bash.",
+];
+
 const TOOL_CALLING_RULES = [
   "Always invoke tools through the function-calling API with valid JSON arguments.",
   "Never output text-based tool calls such as <function=name>(...) </function>, XML tags, or markdown code blocks pretending to be tool calls.",
@@ -77,6 +85,10 @@ function buildGuidelinesSection(): string {
   return GUIDELINES.map((g) => `- ${g}`).join("\n");
 }
 
+function buildExecutionSection(): string {
+  return EXECUTION_RULES.map((r) => `- ${r}`).join("\n");
+}
+
 function buildToolCallingSection(): string {
   return TOOL_CALLING_RULES.map((r) => `- ${r}`).join("\n");
 }
@@ -94,6 +106,9 @@ ${buildToolsSection(mode)}
 Guidelines:
 ${buildGuidelinesSection()}
 
+Execution (critical — you have real shell access):
+${buildExecutionSection()}
+
 Tool calling (critical):
 ${buildToolCallingSection()}
 
@@ -107,11 +122,16 @@ Current date: ${date}
 Current working directory: ${cwd}`;
 }
 
-export function buildSystemPrompt(workdir: string, settings: Settings, base?: string): string {
+export function buildSystemPrompt(
+  workdir: string,
+  settings: Settings,
+  base?: string,
+  sessionId?: string,
+): string {
   const mode = settings.agentMode ?? "build";
   const core = base ?? buildDefaultSystemPrompt(workdir, mode);
   const memory = loadMemorySummary();
-  const plan = loadPlanSummary();
+  const plan = loadPlanSummary(sessionId);
   const skills = formatSkillsCatalog(discoverSkills(workdir, settings));
   const extras: string[] = [];
 
@@ -126,17 +146,38 @@ export function buildSystemPrompt(workdir: string, settings: Settings, base?: st
 export function systemPromptForModel(model: Model, base?: string): string {
   const prompt = base ?? buildDefaultSystemPrompt();
 
+  const toolCallingNote = `
+- Use structured function calls only — never output text claiming you cannot run commands or that you are in a sandbox.
+- When the user asks to run or start an app, call bash immediately (e.g. npm run dev) — do not give manual setup instructions instead.
+- Pass arguments as a JSON object, e.g. {"command": "npm run dev"} for bash.`;
+
   if (model.provider === "groq") {
     const gptOssNote = model.id.includes("gpt-oss")
       ? `
-- GPT-OSS: use exact tool names only (browser, read, grep, etc.). Never append <|channel|>, commentary, or other tokens to tool names.`
+- GPT-OSS: use exact tool names only (browser, read, grep, bash, etc.). Never append <|channel|>, commentary, or other tokens to tool names.
+- GPT-OSS: you have real shell access on the user's machine. Never say you are in a sandbox or cannot run dev servers — use bash.`
       : "";
     return `${prompt}
 
 Provider note (Groq):
 - Use structured function calls only — the API rejects any <function=...> text in the model output.
-- Pass arguments as a JSON object, e.g. {"query": "search terms"} for web_search, {"command": "..."} for bash.
+- Pass arguments as a JSON object, e.g. {"query": "search terms"} for web_search, {"command": "npm run dev"} for bash.
 - Do not wrap arguments in parentheses or output pseudo-JSON outside the tool-call channel.${gptOssNote}`;
+  }
+
+  if (model.provider === "free" && model.id.includes("gpt-oss")) {
+    return `${prompt}
+
+Provider note (GPT-OSS via OpenRouter):
+- Use exact tool names only (browser, read, grep, bash, etc.). Never append <|channel|>, commentary, or other tokens to tool names.
+- You run on the user's real machine with full shell access. Never claim sandbox limitations or inability to run apps — use bash to start dev servers.${toolCallingNote}`;
+  }
+
+  if (model.provider === "free") {
+    return `${prompt}
+
+Provider note (OpenRouter free):
+- Use structured function calls for all actions.${toolCallingNote}`;
   }
 
   return prompt;

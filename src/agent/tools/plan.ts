@@ -1,7 +1,7 @@
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
-import { dirname } from "node:path";
+import { readFileSync, writeFileSync, existsSync, mkdirSync, unlinkSync } from "node:fs";
+import { join } from "node:path";
 import type { ToolDefinition } from "../../providers/types.js";
-import { PLAN_PATH } from "../../config/paths.js";
+import { PLAN_PATH, SESSIONS_DIR } from "../../config/paths.js";
 
 export type TaskStatus = "pending" | "in_progress" | "completed";
 
@@ -20,10 +20,14 @@ interface PlanStore {
   updatedAt: string;
 }
 
+export function planPathForSession(sessionId: string): string {
+  return join(SESSIONS_DIR, `${sessionId}.plan.json`);
+}
+
 export const planTool: ToolDefinition = {
   name: "plan",
   description:
-    "Create and track a task plan for multi-step work. Persists to ~/.agent-dev/plan.json. Use at the start of complex tasks. Supports assignee, parent_id, and run_id for hierarchical boss orchestration.",
+    "Create and track a task plan for multi-step work. Persists per chat session. Use at the start of complex tasks. Supports assignee, parent_id, and run_id for hierarchical boss orchestration.",
   parameters: {
     type: "object",
     properties: {
@@ -61,18 +65,42 @@ export const planTool: ToolDefinition = {
   },
 };
 
-function loadPlan(): PlanStore | null {
-  if (!existsSync(PLAN_PATH)) return null;
+function loadPlanAt(path: string): PlanStore | null {
+  if (!existsSync(path)) return null;
   try {
-    return JSON.parse(readFileSync(PLAN_PATH, "utf-8")) as PlanStore;
+    return JSON.parse(readFileSync(path, "utf-8")) as PlanStore;
   } catch {
     return null;
   }
 }
 
-function savePlan(plan: PlanStore): void {
-  mkdirSync(dirname(PLAN_PATH), { recursive: true });
-  writeFileSync(PLAN_PATH, JSON.stringify(plan, null, 2), "utf-8");
+function savePlanAt(path: string, plan: PlanStore): void {
+  mkdirSync(SESSIONS_DIR, { recursive: true });
+  writeFileSync(path, JSON.stringify(plan, null, 2), "utf-8");
+}
+
+function loadPlan(sessionId?: string): PlanStore | null {
+  if (!sessionId) return null;
+  const path = planPathForSession(sessionId);
+  const sessionPlan = loadPlanAt(path);
+  if (sessionPlan) return sessionPlan;
+
+  // Migrate legacy global plan.json (pre-session-scoped storage) once.
+  if (existsSync(PLAN_PATH)) {
+    const legacy = loadPlanAt(PLAN_PATH);
+    if (legacy && legacy.tasks.length > 0) {
+      savePlanAt(path, legacy);
+      clearLegacyGlobalPlan();
+      return legacy;
+    }
+  }
+
+  return null;
+}
+
+function savePlan(plan: PlanStore, sessionId?: string): void {
+  if (!sessionId) return;
+  savePlanAt(planPathForSession(sessionId), plan);
 }
 
 function formatPlan(plan: PlanStore): string {
@@ -95,23 +123,50 @@ function formatPlan(plan: PlanStore): string {
   return lines.join("\n");
 }
 
-export async function executePlan(args: {
-  action: string;
-  title?: string;
-  tasks?: string[];
-  assignees?: string[];
-  parent_ids?: string[];
-  task_id?: string;
-  status?: string;
-  assignee?: string;
-  parent_id?: string;
-  run_id?: string;
-}): Promise<string> {
+/** Remove the legacy global plan file from before session-scoped plans. */
+export function clearLegacyGlobalPlan(): void {
+  if (existsSync(PLAN_PATH)) {
+    try {
+      unlinkSync(PLAN_PATH);
+    } catch {
+      // ignore
+    }
+  }
+}
+
+export function clearPlan(sessionId: string): void {
+  const path = planPathForSession(sessionId);
+  if (existsSync(path)) {
+    try {
+      unlinkSync(path);
+    } catch {
+      savePlanAt(path, { tasks: [], updatedAt: new Date().toISOString() });
+    }
+  }
+  clearLegacyGlobalPlan();
+}
+
+export async function executePlan(
+  args: {
+    action: string;
+    title?: string;
+    tasks?: string[];
+    assignees?: string[];
+    parent_ids?: string[];
+    task_id?: string;
+    status?: string;
+    assignee?: string;
+    parent_id?: string;
+    run_id?: string;
+  },
+  sessionId?: string,
+): Promise<string> {
   const action = args.action?.trim().toLowerCase();
   if (!action) return "Error: action is required";
+  if (!sessionId) return "Error: no active session for plan storage";
 
   if (action === "clear") {
-    savePlan({ tasks: [], updatedAt: new Date().toISOString() });
+    clearPlan(sessionId);
     return "Plan cleared.";
   }
 
@@ -131,11 +186,12 @@ export async function executePlan(args: {
       })),
       updatedAt: new Date().toISOString(),
     };
-    savePlan(plan);
+    savePlan(plan, sessionId);
+    clearLegacyGlobalPlan();
     return `Plan created.\n${formatPlan(plan)}`;
   }
 
-  const plan = loadPlan();
+  const plan = loadPlan(sessionId);
   if (!plan || plan.tasks.length === 0) return "No active plan. Use action create first.";
 
   if (action === "list") {
@@ -153,7 +209,7 @@ export async function executePlan(args: {
     const next = plan.tasks.find((t) => t.status === "pending");
     if (next) next.status = "in_progress";
     plan.updatedAt = new Date().toISOString();
-    savePlan(plan);
+    savePlan(plan, sessionId);
     return `Task ${taskId} completed.\n${formatPlan(plan)}`;
   }
 
@@ -171,15 +227,16 @@ export async function executePlan(args: {
     if (args.parent_id?.trim()) task.parentId = args.parent_id.trim();
     if (args.run_id?.trim()) task.runId = args.run_id.trim();
     plan.updatedAt = new Date().toISOString();
-    savePlan(plan);
+    savePlan(plan, sessionId);
     return `Task ${taskId} updated.\n${formatPlan(plan)}`;
   }
 
   return `Error: unknown action "${action}". Use create, list, update, complete, or clear.`;
 }
 
-export function loadPlanSummary(): string {
-  const plan = loadPlan();
+export function loadPlanSummary(sessionId?: string): string {
+  if (!sessionId) return "";
+  const plan = loadPlan(sessionId);
   if (!plan || plan.tasks.length === 0) return "";
   return formatPlan(plan);
 }

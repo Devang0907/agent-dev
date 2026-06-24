@@ -15,6 +15,7 @@ import {
   setDelegationContext,
   MAX_DELEGATIONS_PER_TURN,
 } from "./orchestrator/context.js";
+import { clearLegacyGlobalPlan } from "./tools/plan.js";
 import { closeBrowserSession } from "./tools/browser/session.js";
 import { SessionManager } from "../session/manager.js";
 import { generateSessionTitle, fallbackTitle } from "../session/title.js";
@@ -322,6 +323,7 @@ export class AgentSession extends EventEmitter {
     if (this.running) return;
     this.messages = [];
     this.sessionManager = new SessionManager(undefined, this.workdir);
+    clearLegacyGlobalPlan();
     this.sessionManager.saveAsLast();
   }
 

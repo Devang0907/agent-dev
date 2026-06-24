@@ -74,6 +74,7 @@ export function getPlatformContext(): string {
     `Platform: ${platform()} ${arch()} (${release()})`,
     `Shell: ${shell.name}`,
     `Working directory: ${process.cwd()}`,
+    "This agent runs on the user's real local machine — not in a sandbox or cloud VM. Shell commands execute locally.",
   ];
 
   if (platform() === "win32") {
@@ -86,14 +87,16 @@ export function getPlatformContext(): string {
       "For npx/npm scaffolding, always use non-interactive flags (--yes, -y, --defaults) and set CI=1.",
       "Do not use mkdir -p, rm -rf, or touch — use PowerShell equivalents or the write tool.",
       "Use the grep tool for codebase search (findstr on Windows when ripgrep is not installed).",
-      "Dev servers (npm run dev, next dev) start in the background via bash and return a localhost URL.",
+      "Dev servers (npm run dev, next dev) start in the background via bash and return a localhost URL for the user to open.",
+      "When asked to run or preview a web app, always use bash to start the dev server — never refuse or tell the user to run it themselves.",
       "Do not run npm audit fix unless the user explicitly asks.",
     );
   } else {
     lines.push(
       "Use bash/sh syntax. Chain commands with && or ;.",
       "For npx/npm scaffolding, use non-interactive flags (--yes, -y) to avoid prompts.",
-      "Dev servers (npm run dev) start in the background via bash and return a localhost URL.",
+      "Dev servers (npm run dev, next dev) start in the background via bash and return a localhost URL for the user to open.",
+      "When asked to run or preview a web app, always use bash to start the dev server — never refuse or tell the user to run it themselves.",
     );
   }
 

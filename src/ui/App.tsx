@@ -35,7 +35,7 @@ import { useMouseScroll } from "./useMouseScroll.js";
 import { WHEEL_SCROLL_LINES } from "./mouse.js";
 import { SkillsView } from "./SkillsView.js";
 import { discoverSkills } from "../agent/skills.js";
-import { loadPlanSummary } from "../agent/tools/plan.js";
+import { loadPlanSummary, clearPlan, clearLegacyGlobalPlan } from "../agent/tools/plan.js";
 import type { AgentMode } from "../agent/mode.js";
 import type { OrchestratorMode } from "../config/settings.js";
 import { useAppInput } from "./useAppInput.js";
@@ -483,8 +483,17 @@ export function App({ session, workdir, onQuit }: AppProps) {
         ]);
         return;
       }
+      if (value === "/tasks clear") {
+        clearPlan(session.getSessionId());
+        setDisplayMessages((prev) => [
+          ...prev,
+          toDisplayMessage("user", value),
+          toDisplayMessage("assistant", "Plan cleared for this session."),
+        ]);
+        return;
+      }
       if (value === "/tasks") {
-        const summary = loadPlanSummary();
+        const summary = loadPlanSummary(session.getSessionId());
         setDisplayMessages((prev) => [
           ...prev,
           toDisplayMessage("user", value),

@@ -97,8 +97,8 @@ export const bashTool: ToolDefinition = {
   name: "bash",
   description:
     osPlatform() === "win32"
-      ? "Run a PowerShell command. Dev servers (npm run dev) start in background. Chain with ; on Windows PowerShell 5."
-      : "Run a bash command. Dev servers (npm run dev) start in background and return a URL.",
+      ? "Run a PowerShell command on the user's real machine. Use for npm run dev, npm install, builds, tests. Dev servers start in background and return a localhost URL. Chain with ; on Windows PowerShell 5."
+      : "Run a bash command on the user's real machine. Use for npm run dev, npm install, builds, tests. Dev servers start in background and return a localhost URL.",
   parameters: {
     type: "object",
     properties: {

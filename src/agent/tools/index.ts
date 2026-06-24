@@ -37,7 +37,11 @@ import type { BrowserToolArgs } from "./browser/types.js";
 
 export interface AgentTool {
   definition: ToolDefinition;
-  execute: (args: Record<string, unknown>, workdir: string) => Promise<string>;
+  execute: (
+    args: Record<string, unknown>,
+    workdir: string,
+    sessionId?: string,
+  ) => Promise<string>;
 }
 
 export const BUILTIN_TOOLS: AgentTool[] = [
@@ -52,7 +56,7 @@ export const BUILTIN_TOOLS: AgentTool[] = [
   { definition: webSearchTool, execute: (args) => executeWebSearch(args as { query: string }) },
   { definition: docsTool, execute: (args) => executeDocs(args as { query: string; source?: string; url?: string }) },
   { definition: memoryTool, execute: (args) => executeMemory(args as { action: string; key?: string; value?: string }) },
-  { definition: planTool, execute: (args) => executePlan(args as Parameters<typeof executePlan>[0]) },
+  { definition: planTool, execute: (args, _wd, sessionId) => executePlan(args as Parameters<typeof executePlan>[0], sessionId) },
   { definition: delegateTool, execute: (args) => executeDelegate(args as Parameters<typeof executeDelegate>[0]) },
   { definition: databaseTool, execute: (args, wd) => executeDatabase(args as { database: string; query: string }, wd) },
   { definition: verifyTool, execute: (args, wd) => executeVerify(args as { command?: string; type?: string }, wd) },
@@ -124,11 +128,12 @@ export async function executeTool(
   name: string,
   args: Record<string, unknown>,
   workdir: string,
+  sessionId?: string,
 ): Promise<string> {
   const tool = BUILTIN_TOOLS.find((t) => t.definition.name === name);
   if (!tool) return `Error: unknown tool ${name}`;
   try {
-    return await tool.execute(args, workdir);
+    return await tool.execute(args, workdir, sessionId);
   } catch (err) {
     return `Error: ${err instanceof Error ? err.message : String(err)}`;
   }

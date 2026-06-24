@@ -205,12 +205,12 @@ async function runToolBatch(
           },
         });
         try {
-          return await executeTool(tc.name, args, workdir);
+          return await executeTool(tc.name, args, workdir, sessionId);
         } finally {
           setBrowserContext(null);
         }
       }
-      return executeTool(tc.name, args, workdir);
+      return executeTool(tc.name, args, workdir, sessionId);
     };
 
     if (needsPermission && onPermissionRequest) {
@@ -338,7 +338,7 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<ChatMessa
   try {
   let effectivePrompt = systemPromptForModel(
     model,
-    buildSystemPrompt(workdir, { ...settings, agentMode }, systemPrompt),
+    buildSystemPrompt(workdir, { ...settings, agentMode }, systemPrompt, sessionId),
   );
   if (modeSwitchNote) {
     effectivePrompt += `\n\n${modeSwitchNote}`;
