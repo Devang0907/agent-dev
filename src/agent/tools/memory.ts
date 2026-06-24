@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import type { ToolDefinition } from "../../providers/types.js";
-import { MEMORY_PATH } from "../../config/paths.js";
+import { getMemoryPath } from "../../config/paths.js";
 
 interface MemoryEntry {
   key: string;
@@ -31,17 +31,17 @@ export const memoryTool: ToolDefinition = {
 };
 
 function loadMemory(): MemoryStore {
-  if (!existsSync(MEMORY_PATH)) return {};
+  if (!existsSync(getMemoryPath())) return {};
   try {
-    return JSON.parse(readFileSync(MEMORY_PATH, "utf-8")) as MemoryStore;
+    return JSON.parse(readFileSync(getMemoryPath(), "utf-8")) as MemoryStore;
   } catch {
     return {};
   }
 }
 
 function saveMemory(store: MemoryStore): void {
-  mkdirSync(dirname(MEMORY_PATH), { recursive: true });
-  writeFileSync(MEMORY_PATH, JSON.stringify(store, null, 2), "utf-8");
+  mkdirSync(dirname(getMemoryPath()), { recursive: true });
+  writeFileSync(getMemoryPath(), JSON.stringify(store, null, 2), "utf-8");
 }
 
 export async function executeMemory(args: {

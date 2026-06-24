@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { readFileSync, existsSync } from "node:fs";
 import type { ToolDefinition } from "../../providers/types.js";
-import { MCP_CONFIG_PATH } from "../../config/paths.js";
+import { getMcpConfigPath } from "../../config/paths.js";
 
 interface McpServerConfig {
   command: string;
@@ -37,9 +37,9 @@ export const mcpTool: ToolDefinition = {
 };
 
 function loadMcpConfig(): McpConfig {
-  if (!existsSync(MCP_CONFIG_PATH)) return { servers: {} };
+  if (!existsSync(getMcpConfigPath())) return { servers: {} };
   try {
-    return JSON.parse(readFileSync(MCP_CONFIG_PATH, "utf-8")) as McpConfig;
+    return JSON.parse(readFileSync(getMcpConfigPath(), "utf-8")) as McpConfig;
   } catch {
     return { servers: {} };
   }
@@ -164,7 +164,7 @@ export async function executeMcp(args: {
   if (action === "list_servers") {
     const names = Object.keys(servers);
     if (names.length === 0) {
-      return `No MCP servers configured. Add servers to ${MCP_CONFIG_PATH}`;
+      return `No MCP servers configured. Add servers to ${getMcpConfigPath()}`;
     }
     return names
       .map((n) => `- ${n}: ${servers[n]!.command} ${(servers[n]!.args ?? []).join(" ")}`)

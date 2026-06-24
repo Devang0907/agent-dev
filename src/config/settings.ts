@@ -1,5 +1,5 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
-import { CONFIG_DIR, SETTINGS_PATH } from "./paths.js";
+import { getConfigDir, getSettingsPath } from "./paths.js";
 import type { ProviderId } from "../providers/types.js";
 import type { ThinkingLevel } from "../providers/types.js";
 import type { AgentMode } from "../agent/mode.js";
@@ -47,11 +47,11 @@ const DEFAULT_SETTINGS: Settings = {
 };
 
 export function loadSettings(): Settings {
-  if (!existsSync(SETTINGS_PATH)) {
+  if (!existsSync(getSettingsPath())) {
     return { ...DEFAULT_SETTINGS };
   }
   try {
-    const raw = readFileSync(SETTINGS_PATH, "utf-8");
+    const raw = readFileSync(getSettingsPath(), "utf-8");
     const parsed = JSON.parse(raw) as Partial<Settings> & { theme?: string };
     const provider = parsed.defaultProvider ?? DEFAULT_SETTINGS.defaultProvider;
     let defaultModel = parsed.defaultModel ?? DEFAULT_SETTINGS.defaultModel;
@@ -83,8 +83,8 @@ export function loadSettings(): Settings {
 }
 
 export function saveSettings(settings: Settings): void {
-  mkdirSync(CONFIG_DIR, { recursive: true });
-  writeFileSync(SETTINGS_PATH, JSON.stringify(settings, null, 2), "utf-8");
+  mkdirSync(getConfigDir(), { recursive: true });
+  writeFileSync(getSettingsPath(), JSON.stringify(settings, null, 2), "utf-8");
 }
 
 export function setDefaultModel(settings: Settings, provider: ProviderId, modelId: string): Settings {

@@ -29,6 +29,9 @@
     "build": "tsc",
     "start": "node dist/cli.js",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "prepublishOnly": "npm run build",
     "postinstall": "node scripts/postinstall.js",
     "publish:public": "npm publish --access public"
@@ -48,7 +51,11 @@
   "devDependencies": {
     "@types/node": "^22.13.0",
     "@types/react": "^18.3.18",
+    "@vitest/coverage-v8": "^4.1.9",
     "tsx": "^4.19.2",
-    "typescript": "^5.7.3"
+    "typescript": "^5.7.3",
+    "vitest": "^3.2.4",
+    "@vitest/coverage-v8": "^3.2.4",
+    "vitest": "^4.1.9"
   }
 }

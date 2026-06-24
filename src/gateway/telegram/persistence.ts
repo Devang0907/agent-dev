@@ -1,8 +1,8 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
-import { CONFIG_DIR, TELEGRAM_SESSIONS_PATH } from "../../config/paths.js";
+import { getConfigDir, getTelegramSessionsPath } from "../../config/paths.js";
 
-export const TELEGRAM_WELCOMED_PATH = join(CONFIG_DIR, "telegram-welcomed.json");
+export const getTelegramWelcomedPath = () => join(getConfigDir(), "telegram-welcomed.json");
 
 export interface TelegramSessionMap {
   [chatKey: string]: string;
@@ -13,17 +13,17 @@ function chatKey(chatId: number): string {
 }
 
 export function loadTelegramSessionMap(): TelegramSessionMap {
-  if (!existsSync(TELEGRAM_SESSIONS_PATH)) return {};
+  if (!existsSync(getTelegramSessionsPath())) return {};
   try {
-    return JSON.parse(readFileSync(TELEGRAM_SESSIONS_PATH, "utf-8")) as TelegramSessionMap;
+    return JSON.parse(readFileSync(getTelegramSessionsPath(), "utf-8")) as TelegramSessionMap;
   } catch {
     return {};
   }
 }
 
 export function saveTelegramSessionMap(map: TelegramSessionMap): void {
-  mkdirSync(CONFIG_DIR, { recursive: true });
-  writeFileSync(TELEGRAM_SESSIONS_PATH, JSON.stringify(map, null, 2), "utf-8");
+  mkdirSync(getConfigDir(), { recursive: true });
+  writeFileSync(getTelegramSessionsPath(), JSON.stringify(map, null, 2), "utf-8");
 }
 
 export function getSessionIdForChat(chatId: number): string | undefined {
@@ -47,9 +47,9 @@ interface WelcomedStore {
 }
 
 function loadWelcomedStore(): WelcomedStore {
-  if (!existsSync(TELEGRAM_WELCOMED_PATH)) return { userIds: [] };
+  if (!existsSync(getTelegramWelcomedPath())) return { userIds: [] };
   try {
-    const parsed = JSON.parse(readFileSync(TELEGRAM_WELCOMED_PATH, "utf-8")) as WelcomedStore;
+    const parsed = JSON.parse(readFileSync(getTelegramWelcomedPath(), "utf-8")) as WelcomedStore;
     return { userIds: Array.isArray(parsed.userIds) ? parsed.userIds : [] };
   } catch {
     return { userIds: [] };
@@ -57,8 +57,8 @@ function loadWelcomedStore(): WelcomedStore {
 }
 
 function saveWelcomedStore(store: WelcomedStore): void {
-  mkdirSync(CONFIG_DIR, { recursive: true });
-  writeFileSync(TELEGRAM_WELCOMED_PATH, JSON.stringify(store, null, 2), "utf-8");
+  mkdirSync(getConfigDir(), { recursive: true });
+  writeFileSync(getTelegramWelcomedPath(), JSON.stringify(store, null, 2), "utf-8");
 }
 
 export function hasWelcomedUser(userId: number): boolean {

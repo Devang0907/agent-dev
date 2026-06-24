@@ -17,15 +17,15 @@ const READY_RE =
 
 const backgroundProcesses = new Map<number, ChildProcess>();
 
-function getCommandTimeout(command: string): number {
+export function getCommandTimeout(command: string): number {
   return INSTALL_RE.test(command) ? INSTALL_TIMEOUT_MS : DEFAULT_TIMEOUT_MS;
 }
 
-function isDevServerCommand(command: string): boolean {
+export function isDevServerCommand(command: string): boolean {
   return DEV_SERVER_RE.test(command) || /\brun dev\b/i.test(command);
 }
 
-function extractUrl(output: string): string {
+export function extractUrl(output: string): string {
   const http = output.match(/https?:\/\/(?:localhost|127\.0\.0\.1):\d+/i);
   if (http) return http[0]!;
   const local = output.match(/localhost:\d+/i);

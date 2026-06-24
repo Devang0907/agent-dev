@@ -2,7 +2,7 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import type { BrowserContext, Page } from "playwright";
 import { chromium } from "playwright";
-import { BROWSER_PROFILES_DIR } from "../../../config/paths.js";
+import { getBrowserProfilesDir } from "../../../config/paths.js";
 import type { BrowserSettings, TabInfo } from "./types.js";
 import { formatBrowserError } from "./errors.js";
 
@@ -28,7 +28,7 @@ export class BrowserSession {
 
   constructor(sessionId: string, settings: BrowserSettings = {}) {
     this.settings = settings;
-    this.profileDir = settings.profileDir ?? join(BROWSER_PROFILES_DIR, sessionId);
+    this.profileDir = settings.profileDir ?? join(getBrowserProfilesDir(), sessionId);
     mkdirSync(this.profileDir, { recursive: true });
   }
 

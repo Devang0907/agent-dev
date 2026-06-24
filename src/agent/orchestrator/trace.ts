@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { appendFileSync, mkdirSync, readdirSync, statSync, existsSync } from "node:fs";
 import { join } from "node:path";
-import { TRACES_DIR } from "../../config/paths.js";
+import { getTracesDir } from "../../config/paths.js";
 import type { AgentEvent, CoreAgentEvent } from "../loop.js";
 
 export function createRunId(): string {
@@ -21,7 +21,7 @@ export function appendTraceEvent(
   runId: string,
   record: Omit<TraceRecord, "timestamp" | "runId">,
 ): void {
-  const dir = join(TRACES_DIR, sessionId);
+  const dir = join(getTracesDir(), sessionId);
   mkdirSync(dir, { recursive: true });
   const line: TraceRecord = {
     timestamp: new Date().toISOString(),
@@ -46,11 +46,11 @@ export function wrapWorkerEvent(
 }
 
 export function getTracePath(sessionId: string, runId: string): string {
-  return join(TRACES_DIR, sessionId, `${runId}.jsonl`);
+  return join(getTracesDir(), sessionId, `${runId}.jsonl`);
 }
 
 export function getLatestTracePath(sessionId: string): string | null {
-  const dir = join(TRACES_DIR, sessionId);
+  const dir = join(getTracesDir(), sessionId);
   if (!existsSync(dir)) return null;
   const files = readdirSync(dir).filter((f) => f.endsWith(".jsonl"));
   if (files.length === 0) return null;

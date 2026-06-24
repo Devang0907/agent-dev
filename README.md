@@ -71,6 +71,9 @@ npm run dev -- --boss -p "refactor auth module" # Boss mode, print and exit
 npm run dev -- -c                              # Continue last session
 npm run dev -- --model groq/llama-3.3-70b-versatile "hello"
 npm run build && npm start                     # Production build
+npm test                                       # Run test suite
+npm run test:watch                             # Watch mode
+npm run test:coverage                          # Coverage report
 ```
 
 | Flag | Description |

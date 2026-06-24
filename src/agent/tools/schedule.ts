@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import type { ToolDefinition } from "../../providers/types.js";
-import { SCHEDULES_PATH } from "../../config/paths.js";
+import { getSchedulesPath } from "../../config/paths.js";
 import { getScheduleContext } from "./schedule-context.js";
 
 export type ScheduleKind = "reminder" | "task";
@@ -65,17 +65,17 @@ export const scheduleTool: ToolDefinition = {
 };
 
 export function loadSchedules(): ScheduleStore {
-  if (!existsSync(SCHEDULES_PATH)) return {};
+  if (!existsSync(getSchedulesPath())) return {};
   try {
-    return JSON.parse(readFileSync(SCHEDULES_PATH, "utf-8")) as ScheduleStore;
+    return JSON.parse(readFileSync(getSchedulesPath(), "utf-8")) as ScheduleStore;
   } catch {
     return {};
   }
 }
 
 export function saveSchedules(store: ScheduleStore): void {
-  mkdirSync(dirname(SCHEDULES_PATH), { recursive: true });
-  writeFileSync(SCHEDULES_PATH, JSON.stringify(store, null, 2), "utf-8");
+  mkdirSync(dirname(getSchedulesPath()), { recursive: true });
+  writeFileSync(getSchedulesPath(), JSON.stringify(store, null, 2), "utf-8");
 }
 
 export function computeNextDailyAt(dailyAt: string, from = new Date()): string {

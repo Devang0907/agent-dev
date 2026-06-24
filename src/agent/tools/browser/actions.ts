@@ -1,7 +1,7 @@
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import type { Page } from "playwright";
-import { SCREENSHOTS_DIR } from "../../../config/paths.js";
+import { getScreenshotsDir } from "../../../config/paths.js";
 import { getBrowserContext } from "../browser-context.js";
 import { detectPageBlockers } from "./detectors.js";
 import { formatBrowserError } from "./errors.js";
@@ -271,9 +271,9 @@ export async function executeBrowserAction(args: BrowserToolArgs): Promise<strin
 
       case "screenshot": {
         const page = session.resolvePage(args.tabId);
-        mkdirSync(SCREENSHOTS_DIR, { recursive: true });
+        mkdirSync(getScreenshotsDir(), { recursive: true });
         const filename = `screenshot-${Date.now()}.png`;
-        const filepath = join(SCREENSHOTS_DIR, filename);
+        const filepath = join(getScreenshotsDir(), filename);
         onProgress("Taking screenshot...");
         await page.screenshot({ path: filepath, fullPage: false });
         onProgress(`Screenshot saved`);

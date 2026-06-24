@@ -10,7 +10,7 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
-import { SESSIONS_DIR, LAST_SESSION_PATH } from "../config/paths.js";
+import { getSessionsDir, getLastSessionPath } from "../config/paths.js";
 import type { ChatMessage, Model } from "../providers/types.js";
 import { fallbackTitle } from "./title.js";
 
@@ -39,15 +39,15 @@ export class SessionManager {
   private title?: string;
 
   constructor(sessionId?: string, cwd?: string) {
-    mkdirSync(SESSIONS_DIR, { recursive: true });
+    mkdirSync(getSessionsDir(), { recursive: true });
     if (sessionId) {
       this.sessionId = sessionId;
-      this.sessionPath = join(SESSIONS_DIR, `${sessionId}.jsonl`);
+      this.sessionPath = join(getSessionsDir(), `${sessionId}.jsonl`);
       this.load();
     } else {
       const hash = createHash("sha256").update(cwd ?? process.cwd()).digest("hex").slice(0, 12);
       this.sessionId = `${hash}-${Date.now()}`;
-      this.sessionPath = join(SESSIONS_DIR, `${this.sessionId}.jsonl`);
+      this.sessionPath = join(getSessionsDir(), `${this.sessionId}.jsonl`);
     }
   }
 
@@ -131,16 +131,16 @@ export class SessionManager {
 
   saveAsLast(): void {
     writeFileSync(
-      LAST_SESSION_PATH,
+      getLastSessionPath(),
       JSON.stringify({ sessionId: this.sessionId, path: this.sessionPath }),
       "utf-8",
     );
   }
 
   static loadLast(): SessionManager | undefined {
-    if (!existsSync(LAST_SESSION_PATH)) return undefined;
+    if (!existsSync(getLastSessionPath())) return undefined;
     try {
-      const { sessionId } = JSON.parse(readFileSync(LAST_SESSION_PATH, "utf-8"));
+      const { sessionId } = JSON.parse(readFileSync(getLastSessionPath(), "utf-8"));
       return new SessionManager(sessionId);
     } catch {
       return undefined;
@@ -148,12 +148,12 @@ export class SessionManager {
   }
 
   static listSessions(): SessionSummary[] {
-    mkdirSync(SESSIONS_DIR, { recursive: true });
-    const files = readdirSync(SESSIONS_DIR).filter((f) => f.endsWith(".jsonl"));
+    mkdirSync(getSessionsDir(), { recursive: true });
+    const files = readdirSync(getSessionsDir()).filter((f) => f.endsWith(".jsonl"));
     return files
       .map((file) => {
         const sessionId = file.replace(/\.jsonl$/, "");
-        const sessionPath = join(SESSIONS_DIR, file);
+        const sessionPath = join(getSessionsDir(), file);
         const stat = statSync(sessionPath);
         const mgr = new SessionManager(sessionId);
         const messageCount = mgr

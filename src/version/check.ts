@@ -1,12 +1,12 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { CONFIG_DIR } from "../config/paths.js";
+import { getConfigDir } from "../config/paths.js";
 
 export const PACKAGE_NAME = "@devang0907/agent-dev";
 export const UPDATE_COMMAND = "npm update -g @devang0907/agent-dev";
 
-const CACHE_PATH = join(CONFIG_DIR, "update-check.json");
+const cachePath = () => join(getConfigDir(), "update-check.json");
 const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const USER_AGENT =
   "Mozilla/5.0 (compatible; agent-dev/1.0; +https://github.com/Devang0907/agent-dev)";
@@ -38,7 +38,7 @@ function findPackageVersion(): string {
   return "0.0.0";
 }
 
-function compareSemver(a: string, b: string): number {
+export function compareSemver(a: string, b: string): number {
   const parse = (v: string) => v.split(".").map((n) => parseInt(n, 10) || 0);
   const pa = parse(a);
   const pb = parse(b);
@@ -50,17 +50,17 @@ function compareSemver(a: string, b: string): number {
 }
 
 function readCache(): UpdateCache | null {
-  if (!existsSync(CACHE_PATH)) return null;
+  if (!existsSync(cachePath())) return null;
   try {
-    return JSON.parse(readFileSync(CACHE_PATH, "utf8")) as UpdateCache;
+    return JSON.parse(readFileSync(cachePath(), "utf8")) as UpdateCache;
   } catch {
     return null;
   }
 }
 
 function writeCache(cache: UpdateCache): void {
-  mkdirSync(CONFIG_DIR, { recursive: true });
-  writeFileSync(CACHE_PATH, JSON.stringify(cache, null, 2), "utf8");
+  mkdirSync(getConfigDir(), { recursive: true });
+  writeFileSync(cachePath(), JSON.stringify(cache, null, 2), "utf8");
 }
 
 async function fetchLatestVersion(): Promise<string | null> {

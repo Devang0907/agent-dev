@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import type { ToolDefinition } from "../../providers/types.js";
-import { PLAN_PATH, SESSIONS_DIR } from "../../config/paths.js";
+import { getPlanPath, getSessionsDir } from "../../config/paths.js";
 
 export type TaskStatus = "pending" | "in_progress" | "completed";
 
@@ -21,7 +21,7 @@ interface PlanStore {
 }
 
 export function planPathForSession(sessionId: string): string {
-  return join(SESSIONS_DIR, `${sessionId}.plan.json`);
+  return join(getSessionsDir(), `${sessionId}.plan.json`);
 }
 
 export const planTool: ToolDefinition = {
@@ -75,7 +75,7 @@ function loadPlanAt(path: string): PlanStore | null {
 }
 
 function savePlanAt(path: string, plan: PlanStore): void {
-  mkdirSync(SESSIONS_DIR, { recursive: true });
+  mkdirSync(getSessionsDir(), { recursive: true });
   writeFileSync(path, JSON.stringify(plan, null, 2), "utf-8");
 }
 
@@ -86,8 +86,8 @@ function loadPlan(sessionId?: string): PlanStore | null {
   if (sessionPlan) return sessionPlan;
 
   // Migrate legacy global plan.json (pre-session-scoped storage) once.
-  if (existsSync(PLAN_PATH)) {
-    const legacy = loadPlanAt(PLAN_PATH);
+  if (existsSync(getPlanPath())) {
+    const legacy = loadPlanAt(getPlanPath());
     if (legacy && legacy.tasks.length > 0) {
       savePlanAt(path, legacy);
       clearLegacyGlobalPlan();
@@ -125,9 +125,9 @@ function formatPlan(plan: PlanStore): string {
 
 /** Remove the legacy global plan file from before session-scoped plans. */
 export function clearLegacyGlobalPlan(): void {
-  if (existsSync(PLAN_PATH)) {
+  if (existsSync(getPlanPath())) {
     try {
-      unlinkSync(PLAN_PATH);
+      unlinkSync(getPlanPath());
     } catch {
       // ignore
     }

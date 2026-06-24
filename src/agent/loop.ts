@@ -6,7 +6,7 @@ import {
   stripMalformedToolText,
   recoverToolCallsFromValidationError,
 } from "../providers/openai-compat.js";
-import { streamChat } from "../providers/registry.js";
+import { streamChat as defaultStreamChat } from "../providers/registry.js";
 import type { ChatMessage, Model, ToolCall } from "../providers/types.js";
 import type { Settings } from "../config/settings.js";
 import { getToolDefinitions, executeTool, needsToolPermission, formatPermissionCommand, checkPlanModeToolBlock } from "./tools/index.js";
@@ -77,6 +77,7 @@ export interface AgentLoopOptions {
   onPermissionRequest?: (request: PermissionRequest) => Promise<boolean>;
   onInteractionRequest?: (request: InteractionRequest) => Promise<string | null>;
   sessionId?: string;
+  streamChatOverride?: typeof defaultStreamChat;
 }
 
 function isToolUseFailedError(message: string): boolean {
@@ -252,12 +253,13 @@ async function collectStream(
   allowedTools?: string[],
   signal?: AbortSignal,
   onEvent?: (event: AgentEvent) => void,
+  streamChatFn: typeof defaultStreamChat = defaultStreamChat,
 ): Promise<{ content: string; toolCalls: ToolCall[]; error?: string }> {
   const tools = getToolDefinitions(agentMode, allowedTools);
   let content = "";
   const toolCallMap: Map<number, ToolCall> = new Map();
 
-  const stream = streamChat(
+  const stream = streamChatFn(
     model,
     {
       messages,
@@ -330,6 +332,7 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<ChatMessa
     onPermissionRequest,
     onInteractionRequest,
     sessionId,
+    streamChatOverride,
   } = options;
 
   const context = [...messages];
@@ -366,6 +369,7 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<ChatMessa
       allowedTools,
       signal,
       onEvent,
+      streamChatOverride,
     );
 
     const uniqueCalls = resolveToolCalls(content, toolCalls, error);

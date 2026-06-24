@@ -2,13 +2,13 @@ import { readdirSync, readFileSync, existsSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
-import { CONFIG_DIR } from "../config/paths.js";
+import { getConfigDir } from "../config/paths.js";
 import type { Settings } from "../config/settings.js";
 
 const AGENTS_DIR = ".agents";
 const GLOBAL_AGENTS_SKILLS = join(homedir(), ".agents", "skills");
 const GLOBAL_CONFIG_AGENTS_SKILLS = join(homedir(), ".config", "agents", "skills");
-export const USER_SKILLS_DIR = join(CONFIG_DIR, "skills");
+export const USER_SKILLS_DIR = join(getConfigDir(), "skills");
 
 /** Browse all community + Vercel skills */
 export const SKILLS_CATALOG_URL = "https://skills.sh";
