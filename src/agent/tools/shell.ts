@@ -1,4 +1,4 @@
-import { spawn, type ChildProcess } from "node:child_process";
+import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { platform as osPlatform } from "node:os";
 import { getShellConfig, normalizeCommand, type ShellConfig } from "../platform.js";
 
@@ -169,4 +169,35 @@ export async function executeShellCommand(
 
 function combineOutput(stdout: string, stderr: string): string {
   return stdout + (stderr ? (stdout ? `\n${stderr}` : stderr) : "");
+}
+
+export function stopBackgroundProcesses(): number[] {
+  const stopped: number[] = [];
+  for (const [pid, child] of backgroundProcesses) {
+    try {
+      if (osPlatform() === "win32") {
+        spawnSync("taskkill", ["/PID", String(pid), "/F", "/T"], { windowsHide: true });
+      } else {
+        try {
+          process.kill(pid, "SIGTERM");
+        } catch {
+          /* process may already be gone */
+        }
+        try {
+          child.kill("SIGKILL");
+        } catch {
+          /* ignore */
+        }
+      }
+      stopped.push(pid);
+    } catch {
+      /* ignore kill failures */
+    }
+    backgroundProcesses.delete(pid);
+  }
+  return stopped;
+}
+
+export function getBackgroundProcessCount(): number {
+  return backgroundProcesses.size;
 }

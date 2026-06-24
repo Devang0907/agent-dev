@@ -28,6 +28,7 @@ import { mcpTool, executeMcp, formatMcpPermissionCommand } from "./mcp.js";
 import { skillTool, executeSkill } from "./skill.js";
 import { scheduleTool, executeSchedule } from "./schedule.js";
 import { browserTool, executeBrowser } from "./browser/index.js";
+import { listDirTool, executeListDir } from "./list-dir.js";
 import {
   isDestructiveBrowserAction,
   formatBrowserPermissionCommand,
@@ -48,6 +49,7 @@ export interface AgentTool {
 
 export const BUILTIN_TOOLS: AgentTool[] = [
   { definition: readTool, execute: (args, wd) => executeRead(args as { path: string }, wd) },
+  { definition: listDirTool, execute: (args, wd) => executeListDir(args as { path?: string; recursive?: boolean }, wd) },
   { definition: writeTool, execute: (args, wd) => executeWrite(args as { path: string; content: string }, wd) },
   { definition: editTool, execute: (args, wd) => executeEdit(args as { path: string; old_string: string; new_string: string }, wd) },
   { definition: diffTool, execute: (args, wd) => executeDiff(args as { path: string; new_content?: string; old_string?: string; new_string?: string }, wd) },
@@ -72,7 +74,7 @@ export const BUILTIN_TOOLS: AgentTool[] = [
 export const PERMISSION_REQUIRED_TOOLS = new Set(["bash"]);
 
 function defaultNeedsToolPermission(name: string, args: Record<string, unknown>): boolean {
-  if (name === "bash" || name === "exec") return true;
+  if (name === "bash" || name === "exec" || name === "verify") return true;
   if (name === "git") return isGitWriteAction(String(args.action ?? ""));
   if (name === "database") return !isSelectOnlyQuery(String(args.query ?? ""));
   if (name === "mcp") return String(args.action ?? "").toLowerCase() === "call_tool";
@@ -111,6 +113,13 @@ export function formatPermissionCommand(name: string, args: Record<string, unkno
   if (name === "database") return formatDatabasePermissionCommand(args);
   if (name === "mcp") return formatMcpPermissionCommand(args);
   if (name === "browser") return formatBrowserPermissionCommand(args as unknown as BrowserToolArgs);
+  if (name === "verify") {
+    const cmd = String(args.command ?? "").trim();
+    return cmd ? `verify: ${cmd}` : "verify";
+  }
+  if (name === "write" || name === "edit") {
+    return `${name} ${String(args.path ?? "").trim()}`;
+  }
   return name;
 }
 

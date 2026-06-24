@@ -74,4 +74,39 @@ describe("loop permission presets", () => {
     const result = events.find((e) => e.type === "tool_result");
     expect(result && "result" in result && result.result).toMatch(/denied by user/i);
   });
+
+  it("denies verify when permission rejected", async () => {
+    const { events } = await runLoopWithScript({
+      script: toolCallRound("verify", { command: "npm test" }),
+      onPermission: () => false,
+    });
+    const result = events.find((e) => e.type === "tool_result");
+    expect(result && "result" in result && result.result).toMatch(/denied/i);
+  });
+
+  it("auto-allows verify when bash policy matches", async () => {
+    const ws = createTmpWorkspace();
+    mkdirSync(join(ws.path, ".agent-dev"), { recursive: true });
+    writeFileSync(
+      join(ws.path, ".agent-dev", "permissions.json"),
+      JSON.stringify({ bash: { "npm test": "allow" } }),
+      "utf8",
+    );
+
+    let prompted = false;
+    const { events } = await runLoopWithScript({
+      workdir: ws.path,
+      settings: sampleSettings(),
+      scripts: [toolCallRound("verify", { command: "npm test" }), textThenDone("done")],
+      onPermission: () => {
+        prompted = true;
+        return false;
+      },
+    });
+
+    expect(prompted).toBe(false);
+    const result = events.find((e) => e.type === "tool_result");
+    expect(result && "result" in result && result.result).not.toMatch(/denied/i);
+    ws.cleanup();
+  });
 });

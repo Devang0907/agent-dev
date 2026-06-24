@@ -10,6 +10,7 @@ import { loadPlanSummary } from "./tools/plan.js";
 
 const TOOL_SNIPPETS: Record<string, string> = {
   read: "Read file contents (path relative to project root)",
+  list_dir: "List files and directories at a path (use instead of shell ls)",
   write: "Create or overwrite a file with full content",
   edit: "Replace an exact string in a file (old_string must match exactly once)",
   diff: "Preview or show a diff before applying changes",

@@ -34,6 +34,38 @@ function isCoreAgentEvent(event: SessionEvent): event is CoreAgentEvent {
   );
 }
 
+export type PromptEnqueueResult = "idle" | "queued" | "full";
+
+export interface QueuedPrompt {
+  text: string;
+  userId?: number;
+}
+
+export class PromptQueue {
+  private queued?: QueuedPrompt;
+
+  enqueue(text: string, busy: boolean, userId?: number): PromptEnqueueResult {
+    if (!busy) return "idle";
+    if (this.queued) return "full";
+    this.queued = { text, userId };
+    return "queued";
+  }
+
+  take(): QueuedPrompt | undefined {
+    const next = this.queued;
+    this.queued = undefined;
+    return next;
+  }
+
+  clear(): void {
+    this.queued = undefined;
+  }
+
+  hasQueued(): boolean {
+    return this.queued != null;
+  }
+}
+
 export class TelegramSessionBridge {
   private textBuffer = "";
   private activeWorker: { runId: string; workerId: string } | null = null;
@@ -42,6 +74,7 @@ export class TelegramSessionBridge {
   private approvalCounter = 0;
   private interactionCounter = 0;
   private agentLineStarted = false;
+  private readonly promptQueue = new PromptQueue();
 
   constructor(
     readonly session: AgentSession,
@@ -173,7 +206,24 @@ export class TelegramSessionBridge {
         this.agentLineStarted = false;
       }
       await this.flushTextBuffer();
+      await this.drainQueue();
     }
+  }
+
+  enqueueOrReject(text: string, userId?: number): PromptEnqueueResult {
+    return this.promptQueue.enqueue(text, this.session.isRunning(), userId);
+  }
+
+  clearQueue(): void {
+    this.promptQueue.clear();
+  }
+
+  private async drainQueue(): Promise<void> {
+    const next = this.promptQueue.take();
+    if (!next) return;
+    void this.prompt(next.text, next.userId).catch((err) => {
+      console.error("[telegram] queued prompt error:", err);
+    });
   }
 
   private async handleInteractionRequest(request: InteractionRequest): Promise<void> {

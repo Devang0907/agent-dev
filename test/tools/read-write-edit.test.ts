@@ -35,6 +35,28 @@ describe("read/write/edit tools", () => {
     ws.cleanup();
   });
 
+  it("rejects edit when old_string appears multiple times", async () => {
+    const ws = createTmpWorkspace({ files: { "a.txt": "foo bar foo" } });
+    const result = await executeEdit(
+      { path: "a.txt", old_string: "foo", new_string: "baz" },
+      ws.path,
+    );
+    expect(result).toMatch(/appears 2 times/);
+    const content = await executeRead({ path: "a.txt" }, ws.path);
+    expect(content).toBe("foo bar foo");
+    ws.cleanup();
+  });
+
+  it("rejects edit when old_string not found", async () => {
+    const ws = createTmpWorkspace({ files: { "a.txt": "hello" } });
+    const result = await executeEdit(
+      { path: "a.txt", old_string: "missing", new_string: "x" },
+      ws.path,
+    );
+    expect(result).toMatch(/not found/);
+    ws.cleanup();
+  });
+
   it("truncates large reads", async () => {
     const ws = createTmpWorkspace({ files: { "big.txt": "x".repeat(60_000) } });
     const content = await executeRead({ path: "big.txt" }, ws.path);

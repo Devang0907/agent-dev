@@ -1,5 +1,10 @@
 import type { ChatContext, Model, StreamEvent, ToolCall, ToolDefinition } from "./types.js";
 import type { Settings } from "../config/settings.js";
+import {
+  anthropicThinkingBudget,
+  supportsAnthropicThinking,
+  isThinkingStreamBlock,
+} from "./thinking.js";
 
 export const PROVIDER_ID = "anthropic" as const;
 export const DEFAULT_MODEL = "claude-sonnet-4-6";
@@ -175,6 +180,16 @@ export async function* streamChat(
     body.tools = toAnthropicTools(ctx.tools);
   }
 
+  const level = ctx.thinkingLevel ?? settings?.thinkingLevel ?? "off";
+  const thinkingBudget =
+    level !== "off" && supportsAnthropicThinking(model.id)
+      ? anthropicThinkingBudget(level)
+      : null;
+  if (thinkingBudget != null) {
+    body.thinking = { type: "enabled", budget_tokens: thinkingBudget };
+    body.max_tokens = Math.max(8192, thinkingBudget + 4096);
+  }
+
   try {
     const response = await fetch(BASE_URL, {
       method: "POST",
@@ -213,6 +228,10 @@ export async function* streamChat(
         const index = chunk.index as number;
         const delta = chunk.delta as Record<string, unknown> | undefined;
         if (!delta) continue;
+
+        if (isThinkingStreamBlock(String(delta.type ?? ""))) {
+          continue;
+        }
 
         if (delta.type === "text_delta" && typeof delta.text === "string") {
           yield { type: "text_delta", delta: delta.text };

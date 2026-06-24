@@ -85,12 +85,27 @@ export async function executeEdit(
     return `Error: file not found: ${args.path}`;
   }
   const content = readFileSync(filePath, "utf-8");
-  if (!content.includes(args.old_string)) {
+  const occurrences = countOccurrences(content, args.old_string);
+  if (occurrences === 0) {
     return `Error: old_string not found in ${args.path}`;
+  }
+  if (occurrences > 1) {
+    return `Error: old_string appears ${occurrences} times in ${args.path}; include more context so it matches exactly once.`;
   }
   const newContent = content.replace(args.old_string, args.new_string);
   writeFileSync(filePath, newContent, "utf-8");
   return `Edited ${args.path}`;
+}
+
+function countOccurrences(haystack: string, needle: string): number {
+  if (!needle) return 0;
+  let count = 0;
+  let idx = 0;
+  while ((idx = haystack.indexOf(needle, idx)) !== -1) {
+    count++;
+    idx += needle.length;
+  }
+  return count;
 }
 
 export const bashTool: ToolDefinition = {

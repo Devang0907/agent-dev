@@ -1,5 +1,6 @@
 import type { ChatContext, Model, StreamEvent, ToolCall } from "./types.js";
 import type { Settings } from "../config/settings.js";
+import { geminiThinkingBudget, supportsGeminiThinking } from "./thinking.js";
 
 export const PROVIDER_ID = "gemini" as const;
 export const DEFAULT_MODEL = "gemini-2.0-flash";
@@ -149,6 +150,15 @@ export async function* streamChat(
 
   if (ctx.tools.length > 0) {
     body.tools = [{ functionDeclarations: toFunctionDeclarations(ctx.tools) }];
+  }
+
+  const level = ctx.thinkingLevel ?? settings?.thinkingLevel ?? "off";
+  const thinkingBudget =
+    level !== "off" && supportsGeminiThinking(model.id) ? geminiThinkingBudget(level) : null;
+  if (thinkingBudget != null) {
+    body.generationConfig = {
+      thinkingConfig: { thinkingBudget },
+    };
   }
 
   try {

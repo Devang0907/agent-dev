@@ -29,6 +29,17 @@ const SCRIPT_MAP: Record<string, string[]> = {
   typecheck: ["typecheck", "check", "lint"],
 };
 
+export function resolveVerifyCommand(
+  args: { command?: string; type?: string },
+  workdir: string,
+): string | null {
+  return (
+    args.command?.trim() ||
+    detectCommand(workdir, args.type?.trim().toLowerCase()) ||
+    null
+  );
+}
+
 function detectCommand(workdir: string, type?: string): string | null {
   const pkgPath = join(workdir, "package.json");
   if (existsSync(pkgPath)) {
@@ -73,9 +84,7 @@ export async function executeVerify(
   args: { command?: string; type?: string },
   workdir: string,
 ): Promise<string> {
-  const command =
-    args.command?.trim() ||
-    detectCommand(workdir, args.type?.trim().toLowerCase());
+  const command = resolveVerifyCommand(args, workdir);
 
   if (!command) {
     return "Error: no test command found. Provide command or add scripts.test to package.json.";

@@ -105,6 +105,9 @@ export function SettingsView({
             <Text bold>{settings.thinkingLevel}</Text>
             {index === 0 && <Text color={theme.textMuted}> (Enter to cycle)</Text>}
           </Text>
+          <Text color={theme.textMuted}>
+            {"  "}Applies to Claude, OpenAI o-series, Gemini 2.5+; ignored elsewhere
+          </Text>
 
           <Text color={index === 1 ? theme.primary : theme.text}>
             {index === 1 ? "› " : "  "}Auto-compact:{" "}

@@ -17,6 +17,7 @@ import {
 } from "./orchestrator/context.js";
 import { clearLegacyGlobalPlan } from "./tools/plan.js";
 import { closeBrowserSession } from "./tools/browser/session.js";
+import { stopBackgroundProcesses } from "./tools/shell.js";
 import { SessionManager } from "../session/manager.js";
 import type { CompactionReason } from "../session/manager.js";
 import { generateSessionTitle, fallbackTitle } from "../session/title.js";
@@ -313,6 +314,7 @@ export class AgentSession extends EventEmitter {
     this.resolvePermission(false);
     this.resolveInteraction(null);
     void closeBrowserSession(this.getSessionId());
+    stopBackgroundProcesses();
   }
 
   respondToPermission(approved: boolean): void {
@@ -450,6 +452,7 @@ export class AgentSession extends EventEmitter {
 
   newSession(): void {
     if (this.running) return;
+    stopBackgroundProcesses();
     this.messages = [];
     this.sessionManager = new SessionManager(undefined, this.workdir);
     this.lastStreamUsage = undefined;

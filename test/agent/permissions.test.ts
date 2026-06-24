@@ -66,7 +66,46 @@ describe("resolveToolPermission", () => {
     const ws = createTmpWorkspace();
     const settings = sampleSettings();
     expect(resolveToolPermission("bash", { command: "echo hi" }, ws.path, settings)).toBe("ask");
+    expect(resolveToolPermission("verify", { command: "npm test" }, ws.path, settings)).toBe("ask");
     expect(resolveToolPermission("git", { action: "commit" }, ws.path, settings)).toBe("ask");
+    ws.cleanup();
+  });
+
+  it("verify uses bash permission rules", () => {
+    const ws = createTmpWorkspace();
+    mkdirSync(join(ws.path, ".agent-dev"), { recursive: true });
+    writeFileSync(
+      join(ws.path, ".agent-dev", "permissions.json"),
+      JSON.stringify({ bash: { "npm test": "allow", "rm *": "deny" } }),
+      "utf8",
+    );
+    const settings = sampleSettings();
+    expect(resolveToolPermission("verify", { command: "npm test" }, ws.path, settings)).toBe("allow");
+    expect(resolveToolPermission("verify", { command: "rm -rf tmp" }, ws.path, settings)).toBe("deny");
+    ws.cleanup();
+  });
+
+  it("allows write/edit without files rules configured", () => {
+    const ws = createTmpWorkspace();
+    const settings = sampleSettings();
+    expect(resolveToolPermission("write", { path: "src/foo.ts" }, ws.path, settings)).toBe("allow");
+    expect(resolveToolPermission("edit", { path: "package.json" }, ws.path, settings)).toBe("allow");
+    ws.cleanup();
+  });
+
+  it("gates write/edit when files rules are configured", () => {
+    const ws = createTmpWorkspace();
+    mkdirSync(join(ws.path, ".agent-dev"), { recursive: true });
+    writeFileSync(
+      join(ws.path, ".agent-dev", "permissions.json"),
+      JSON.stringify({ files: { "*": "ask", ".agent-dev/plans/*": "allow" } }),
+      "utf8",
+    );
+    const settings = sampleSettings();
+    expect(resolveToolPermission("write", { path: "src/foo.ts" }, ws.path, settings)).toBe("ask");
+    expect(
+      resolveToolPermission("write", { path: ".agent-dev/plans/plan.md" }, ws.path, settings),
+    ).toBe("allow");
     ws.cleanup();
   });
 });

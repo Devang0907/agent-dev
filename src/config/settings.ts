@@ -41,7 +41,7 @@ export interface ProjectRulesSettings {
 export type PermissionAction = "allow" | "ask" | "deny";
 export type PermissionRuleValue = PermissionAction | Record<string, PermissionAction>;
 export type PermissionRulesConfig = Partial<
-  Record<"bash" | "git" | "database" | "mcp" | "browser", PermissionRuleValue>
+  Record<"bash" | "git" | "database" | "mcp" | "browser" | "files", PermissionRuleValue>
 >;
 
 export interface Settings {

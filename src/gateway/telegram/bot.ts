@@ -254,6 +254,7 @@ export async function runTelegramGateway(cliOptions: TelegramGatewayOptions & { 
     logGateway("Turn aborted by user");
 
     const bridge = getOrCreateBridge(chatId);
+    bridge.clearQueue();
     bridge.session.abort();
     await ctx.reply("Aborted current turn.");
   });
@@ -454,6 +455,12 @@ export async function runTelegramGateway(cliOptions: TelegramGatewayOptions & { 
 
     if (bridge.session.isRunning()) {
       logUserMessage(userId, text);
+      const enqueueResult = bridge.enqueueOrReject(text, userId);
+      if (enqueueResult === "queued") {
+        logGateway("Message queued for after current turn");
+        await ctx.reply("Got it — I'll run this after the current turn.");
+        return;
+      }
       logGateway("Agent busy — message not queued");
       await sendBusyReply(ctx);
       return;

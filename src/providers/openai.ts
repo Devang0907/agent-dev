@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import type { ChatContext, Model, StreamEvent, ToolCall } from "./types.js";
 import type { Settings } from "../config/settings.js";
+import { openAiReasoningEffort, supportsOpenAiReasoning } from "./thinking.js";
 
 export const PROVIDER_ID = "openai" as const;
 export const DEFAULT_MODEL = "gpt-4o";
@@ -82,12 +83,19 @@ export async function* streamChat(
   const client = new OpenAI({ apiKey, baseURL: BASE_URL });
 
   try {
+    const level = ctx.thinkingLevel ?? settings?.thinkingLevel ?? "off";
+    const reasoningEffort =
+      level !== "off" && supportsOpenAiReasoning(model.id)
+        ? openAiReasoningEffort(level)
+        : null;
+
     const stream = await client.chat.completions.create({
       model: model.id,
       messages: toOpenAIMessages(ctx),
       tools: ctx.tools.length > 0 ? toOpenAITools(ctx.tools) : undefined,
       stream: true,
       stream_options: { include_usage: true },
+      ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {}),
     }, { signal: ctx.signal });
 
     const toolCalls: Map<number, ToolCall> = new Map();

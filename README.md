@@ -196,6 +196,8 @@ Timing options the agent can set: `in_minutes` (e.g. 5), `daily_at` in 24h local
 
 **Requirements:** the gateway process must stay running (see [Run](#run) above). If a **task** fires while the agent is busy, it retries in about a minute. **Reminders** always send immediately.
 
+While the agent is busy, Telegram accepts **one queued follow-up message** per chat; additional messages get a busy reply until the queue drains.
+
 ### Security
 
 - Only users in `allowedUserIds` can chat with the agent (except `/whoami` for setup).
@@ -286,7 +288,7 @@ Boss worker sessions do not inherit project rules in v1 (main agent loop only).
 
 ## Permission presets
 
-Gated tools (shell, git writes, DB mutations, MCP `call_tool`, destructive browser actions) normally prompt for approval. Permission presets let you **allow**, **ask**, or **deny** by pattern.
+Gated tools (shell, `verify`, git writes, DB mutations, MCP `call_tool`, destructive browser actions) normally prompt for approval. Optional **`files`** rules gate `write`/`edit` when configured. Permission presets let you **allow**, **ask**, or **deny** by pattern.
 
 **Config** (project patterns append to global; **last matching rule wins**):
 
@@ -311,9 +313,14 @@ Example `permissions.json`:
   },
   "database": { "*": "ask", "SELECT *": "allow" },
   "mcp": { "call_tool": "ask" },
-  "browser": { "*": "ask" }
+  "browser": { "*": "ask" },
+  "files": { "*": "ask", ".agent-dev/plans/*": "allow" }
 }
 ```
+
+`verify` uses the same **`bash`** permission rules (e.g. `npm test: allow` applies to both `bash` and `verify`).
+
+The **`files`** category is optional — without `files` rules, `write` and `edit` are allowed without prompting. Add `files` rules for paranoid setups.
 
 Shorthand: `"bash": "ask"` expands to `{ "*": "ask" }`. Put `"*": "ask"` first, then more specific patterns after.
 
@@ -363,11 +370,12 @@ Boss mode uses the same model you select in `/model`. Workers run in isolated co
 
 ## Tools
 
-The agent has **19 built-in tools** (`delegate` is boss-only; 18 are available in normal mode):
+The agent has **20 built-in tools** (`delegate` is boss-only; 19 are available in normal mode):
 
 | Tool | Description |
 |------|-------------|
 | `read` | Read a file in the project directory |
+| `list_dir` | List files and directories (use instead of shell `ls`) |
 | `write` | Create or overwrite a file |
 | `edit` | Replace text in a file |
 | `diff` | Preview unified diff before applying changes |
@@ -529,6 +537,8 @@ Example `settings.json`:
 ```
 
 Set `orchestratorMode` to `"boss"` to enable boss mode by default.
+
+**Thinking level** (`thinkingLevel` in settings or `/settings`) enables extended reasoning on supported models: Claude Sonnet/Opus 4+, OpenAI o3/o4-mini, and Gemini 2.5+. Other providers ignore it.
 
 ### Environment variables
 

@@ -11,10 +11,11 @@ import {
   isDestructiveBrowserAction,
   formatBrowserPermissionCommand,
 } from "./tools/browser/detectors.js";
+import { resolveVerifyCommand } from "./tools/verify.js";
 
 export type PermissionAction = "allow" | "ask" | "deny";
 
-export type PermissionCategory = "bash" | "git" | "database" | "mcp" | "browser";
+export type PermissionCategory = "bash" | "git" | "database" | "mcp" | "browser" | "files";
 
 export type PermissionRuleValue = PermissionAction | Record<string, PermissionAction>;
 
@@ -26,6 +27,7 @@ export interface MergedPermissionRules {
   database: Array<[string, PermissionAction]>;
   mcp: Array<[string, PermissionAction]>;
   browser: Array<[string, PermissionAction]>;
+  files: Array<[string, PermissionAction]>;
 }
 
 const EMPTY_RULES: MergedPermissionRules = {
@@ -34,6 +36,7 @@ const EMPTY_RULES: MergedPermissionRules = {
   database: [],
   mcp: [],
   browser: [],
+  files: [],
 };
 
 function normalizeRulesEntry(value: PermissionRuleValue): Array<[string, PermissionAction]> {
@@ -80,6 +83,7 @@ export function loadMergedPermissionRules(workdir: string, settings: Settings): 
     database: mergeCategoryRules(globalRules, projectRules, "database"),
     mcp: mergeCategoryRules(globalRules, projectRules, "mcp"),
     browser: mergeCategoryRules(globalRules, projectRules, "browser"),
+    files: mergeCategoryRules(globalRules, projectRules, "files"),
   };
 }
 
@@ -100,6 +104,28 @@ export function matchPermissionPattern(pattern: string, value: string): boolean 
   return v === p;
 }
 
+export function matchFilePermissionPattern(pattern: string, value: string): boolean {
+  const normalizedPattern = pattern.trim().replace(/\\/g, "/");
+  const normalizedValue = value.trim().replace(/\\/g, "/");
+  if (normalizedPattern === "*") return true;
+
+  const caseInsensitive = process.platform === "win32";
+  const p = caseInsensitive ? normalizedPattern.toLowerCase() : normalizedPattern;
+  const v = caseInsensitive ? normalizedValue.toLowerCase() : normalizedValue;
+
+  if (p.endsWith("/*")) {
+    const prefix = p.slice(0, -2);
+    return v === prefix || v.startsWith(`${prefix}/`);
+  }
+
+  if (p.startsWith("*.")) {
+    const suffix = p.slice(1);
+    return v.endsWith(suffix) || v.includes(`/${p.slice(2)}`);
+  }
+
+  return matchPermissionPattern(pattern, value);
+}
+
 export function resolvePermissionForCategory(
   rules: Array<[string, PermissionAction]>,
   matchValue: string,
@@ -116,8 +142,13 @@ export function resolvePermissionForCategory(
   return action;
 }
 
-function isPermissionGatedTool(name: string, args: Record<string, unknown>): boolean {
-  if (name === "bash" || name === "exec") return true;
+function isPermissionGatedTool(
+  name: string,
+  args: Record<string, unknown>,
+  filesRulesConfigured: boolean,
+): boolean {
+  if (name === "write" || name === "edit") return filesRulesConfigured;
+  if (name === "bash" || name === "exec" || name === "verify") return true;
   if (name === "git") return isGitWriteAction(String(args.action ?? ""));
   if (name === "database") return !isSelectOnlyQuery(String(args.query ?? ""));
   if (name === "mcp") return String(args.action ?? "").toLowerCase() === "call_tool";
@@ -131,7 +162,8 @@ function isPermissionGatedTool(name: string, args: Record<string, unknown>): boo
 }
 
 function permissionCategoryForTool(name: string): PermissionCategory | null {
-  if (name === "bash" || name === "exec") return "bash";
+  if (name === "bash" || name === "exec" || name === "verify") return "bash";
+  if (name === "write" || name === "edit") return "files";
   if (name === "git") return "git";
   if (name === "database") return "database";
   if (name === "mcp") return "mcp";
@@ -150,10 +182,30 @@ function formatPermissionCommand(name: string, args: Record<string, unknown>): s
   if (name === "database") return formatDatabasePermissionCommand(args);
   if (name === "mcp") return formatMcpPermissionCommand(args);
   if (name === "browser") return formatBrowserPermissionCommand(args as unknown as BrowserToolArgs);
+  if (name === "verify") {
+    const cmd = String(args.command ?? "").trim();
+    return cmd ? `verify: ${cmd}` : "verify";
+  }
+  if (name === "write" || name === "edit") {
+    return `${name} ${String(args.path ?? "").trim()}`;
+  }
   return name;
 }
 
-function matchValueForTool(name: string, args: Record<string, unknown>): string {
+function matchValueForTool(
+  name: string,
+  args: Record<string, unknown>,
+  workdir?: string,
+): string {
+  if (name === "verify" && workdir) {
+    return resolveVerifyCommand(
+      args as { command?: string; type?: string },
+      workdir,
+    ) ?? "verify";
+  }
+  if (name === "write" || name === "edit") {
+    return String(args.path ?? "").trim().replace(/\\/g, "/");
+  }
   if (name === "git") {
     const action = String(args.action ?? "").trim();
     const extra = String(args.args ?? "").trim();
@@ -178,16 +230,38 @@ export function resolveToolPermission(
   workdir: string,
   settings: Settings,
 ): PermissionAction {
-  if (!isPermissionGatedTool(name, args)) {
+  const rules = loadMergedPermissionRules(workdir, settings);
+  const filesRulesConfigured = rules.files.length > 0;
+
+  if (!isPermissionGatedTool(name, args, filesRulesConfigured)) {
     return "allow";
   }
 
   const category = permissionCategoryForTool(name);
   if (!category) return "ask";
 
-  const rules = loadMergedPermissionRules(workdir, settings);
-  const matchValue = matchValueForTool(name, args);
-  return resolvePermissionForCategory(rules[category], matchValue, "ask");
+  const matchValue = matchValueForTool(name, args, workdir);
+  const defaultAction = category === "files" ? "allow" : "ask";
+  if (category === "files") {
+    return resolveFilesPermission(rules.files, matchValue, defaultAction);
+  }
+  return resolvePermissionForCategory(rules[category], matchValue, defaultAction);
+}
+
+function resolveFilesPermission(
+  rules: Array<[string, PermissionAction]>,
+  matchValue: string,
+  defaultAction: PermissionAction,
+): PermissionAction {
+  if (rules.length === 0) return defaultAction;
+
+  let action = defaultAction;
+  for (const [pattern, ruleAction] of rules) {
+    if (matchFilePermissionPattern(pattern, matchValue)) {
+      action = ruleAction;
+    }
+  }
+  return action;
 }
 
 export function countPermissionRules(rules: MergedPermissionRules): Record<PermissionCategory, number> {
@@ -197,6 +271,7 @@ export function countPermissionRules(rules: MergedPermissionRules): Record<Permi
     database: rules.database.length,
     mcp: rules.mcp.length,
     browser: rules.browser.length,
+    files: rules.files.length,
   };
 }
 
@@ -205,7 +280,7 @@ export function formatPermissionRulesSummary(workdir: string, settings: Settings
   const counts = countPermissionRules(merged);
   const lines: string[] = ["Permission presets (last matching rule wins):"];
 
-  for (const category of ["bash", "git", "database", "mcp", "browser"] as const) {
+  for (const category of ["bash", "git", "database", "mcp", "browser", "files"] as const) {
     const rules = merged[category];
     if (rules.length === 0) continue;
     lines.push(`\n${category}:`);

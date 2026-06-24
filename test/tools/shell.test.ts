@@ -31,4 +31,13 @@ describe("shell helpers", () => {
   it("uses longer timeout for install", () => {
     expect(getCommandTimeout("npm install")).toBeGreaterThan(getCommandTimeout("echo hi"));
   });
+
+  it("stopBackgroundProcesses clears tracked processes", async () => {
+    const { stopBackgroundProcesses, getBackgroundProcessCount } = await import(
+      "../../src/agent/tools/shell.js"
+    );
+    expect(getBackgroundProcessCount()).toBe(0);
+    expect(stopBackgroundProcesses()).toEqual([]);
+    expect(getBackgroundProcessCount()).toBe(0);
+  });
 });
