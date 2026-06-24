@@ -4,6 +4,8 @@ import type { Model } from "../providers/types.js";
 import type { ThemeColors } from "./theme.js";
 import type { OrchestratorMode } from "../config/settings.js";
 import { modelRef } from "../config/models.js";
+import type { UpdateInfo } from "../version/check.js";
+import { UPDATE_COMMAND } from "../version/check.js";
 
 interface FooterProps {
   workdir: string;
@@ -11,6 +13,7 @@ interface FooterProps {
   theme: ThemeColors;
   scrollHint?: string;
   orchestratorMode?: OrchestratorMode;
+  updateInfo?: UpdateInfo | null;
 }
 
 function shortPath(path: string, max = 56): string {
@@ -18,7 +21,7 @@ function shortPath(path: string, max = 56): string {
   return "…" + path.slice(-(max - 1));
 }
 
-export function Footer({ workdir, model, theme, scrollHint, orchestratorMode }: FooterProps) {
+export function Footer({ workdir, model, theme, scrollHint, orchestratorMode, updateInfo }: FooterProps) {
   return (
     <Box
       borderStyle="single"
@@ -43,6 +46,13 @@ export function Footer({ workdir, model, theme, scrollHint, orchestratorMode }: 
           <>
             {"  "}
             <Text color={theme.warning}>{scrollHint}</Text>
+          </>
+        )}
+        {updateInfo && (
+          <>
+            {"  "}
+            <Text color={theme.warning}>↑ v{updateInfo.latest}</Text>
+            <Text color={theme.textMuted}> · {UPDATE_COMMAND}</Text>
           </>
         )}
       </Text>

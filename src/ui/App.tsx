@@ -42,6 +42,7 @@ import { useAppInput } from "./useAppInput.js";
 import { isModelCommand } from "./slash-commands.js";
 import { sanitizeErrorForUser } from "../providers/openai-compat.js";
 import { getLatestTracePath } from "../agent/orchestrator/trace.js";
+import { checkForUpdate, type UpdateInfo } from "../version/check.js";
 
 let nextMessageId = 0;
 
@@ -118,6 +119,7 @@ export function App({ session, workdir, onQuit }: AppProps) {
   const [sessionListRefresh, setSessionListRefresh] = useState(0);
   const streamingRef = useRef("");
   const startupChecked = useRef(false);
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
 
   const theme = getTheme();
 
@@ -215,6 +217,10 @@ export function App({ session, workdir, onQuit }: AppProps) {
       openApiKeyPrompt(current, "none");
     }
   }, [session, settings, openApiKeyPrompt]);
+
+  useEffect(() => {
+    void checkForUpdate().then(setUpdateInfo);
+  }, []);
 
   useEffect(() => {
     const handler = (event: SessionEvent) => {
@@ -662,7 +668,7 @@ export function App({ session, workdir, onQuit }: AppProps) {
         />
       ) : (
         <Box height={viewportHeight} overflow="hidden" flexShrink={0} paddingX={2}>
-          <StartupBanner theme={theme} compact={suggestionsOpen} />
+          <StartupBanner theme={theme} compact={suggestionsOpen} updateInfo={updateInfo} />
         </Box>
       )}
 
@@ -672,6 +678,7 @@ export function App({ session, workdir, onQuit }: AppProps) {
         theme={theme}
         scrollHint={scrollHint}
         orchestratorMode={orchestratorMode}
+        updateInfo={updateInfo}
       />
 
       {overlay === "none" && (
