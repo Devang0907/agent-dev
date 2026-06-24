@@ -57,4 +57,26 @@ describe("checkForUpdate", () => {
     await checkForUpdate();
     expect(fetchSpy).not.toHaveBeenCalled();
   });
+
+  it("re-fetches when cache says up to date but npm has a newer release", async () => {
+    const { writeFileSync, mkdirSync } = await import("node:fs");
+    const { getCurrentVersion } = await import("../../src/version/check.js");
+    mkdirSync(process.env.AGENT_DEV_DIR!, { recursive: true });
+    writeFileSync(
+      cachePath(),
+      JSON.stringify({ checkedAt: Date.now(), latest: getCurrentVersion() }),
+    );
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ "dist-tags": { latest: "99.0.0" } }),
+      }),
+    );
+
+    const info = await checkForUpdate();
+    expect(info).not.toBeNull();
+    expect(info!.latest).toBe("99.0.0");
+    expect(compareSemver(info!.current, info!.latest)).toBeLessThan(0);
+  });
 });

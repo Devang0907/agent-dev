@@ -19,6 +19,7 @@ export interface UpdateInfo {
 interface UpdateCache {
   checkedAt: number;
   latest: string;
+  current?: string;
 }
 
 function findPackageVersion(): string {
@@ -89,10 +90,18 @@ export async function checkForUpdate(): Promise<UpdateInfo | null> {
 
   if (cache && now - cache.checkedAt < CHECK_INTERVAL_MS) {
     latest = cache.latest;
+    // Re-check npm when cache thinks we're up to date — a newer release may have shipped.
+    if (compareSemver(current, cache.latest) >= 0) {
+      const fresh = await fetchLatestVersion();
+      if (fresh) {
+        latest = fresh;
+        writeCache({ checkedAt: now, latest: fresh, current });
+      }
+    }
   } else {
     latest = await fetchLatestVersion();
     if (latest) {
-      writeCache({ checkedAt: now, latest });
+      writeCache({ checkedAt: now, latest, current });
     } else if (cache) {
       latest = cache.latest;
     }
