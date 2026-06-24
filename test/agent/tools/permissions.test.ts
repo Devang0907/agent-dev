@@ -4,9 +4,13 @@ import {
   formatPermissionCommand,
   getToolDefinitions,
   needsToolPermission,
+  resolveToolPermission,
 } from "../../../src/agent/tools/index.js";
 import { BOSS_TOOL_NAMES } from "../../../src/agent/orchestrator/workers.js";
 import { createTmpWorkspace } from "../../fixtures/tmp-workspace.js";
+import { sampleSettings } from "../../fixtures/sample-settings.js";
+import { writeFileSync, mkdirSync } from "node:fs";
+import { join } from "node:path";
 
 describe("needsToolPermission", () => {
   it.each([
@@ -21,6 +25,21 @@ describe("needsToolPermission", () => {
     ["mcp", { action: "list_tools" }, false],
   ] as const)("tool %s permission=%s", (name, args, expected) => {
     expect(needsToolPermission(name, args)).toBe(expected);
+  });
+
+  it("uses resolveToolPermission when workdir and settings provided", () => {
+    const ws = createTmpWorkspace();
+    mkdirSync(join(ws.path, ".agent-dev"), { recursive: true });
+    writeFileSync(
+      join(ws.path, ".agent-dev", "permissions.json"),
+      JSON.stringify({ bash: { "npm test": "allow" } }),
+      "utf8",
+    );
+    const settings = sampleSettings();
+    expect(needsToolPermission("bash", { command: "npm test" }, ws.path, settings)).toBe(false);
+    expect(needsToolPermission("bash", { command: "rm x" }, ws.path, settings)).toBe(true);
+    expect(resolveToolPermission("bash", { command: "npm test" }, ws.path, settings)).toBe("allow");
+    ws.cleanup();
   });
 });
 

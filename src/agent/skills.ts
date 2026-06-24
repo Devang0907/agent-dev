@@ -4,6 +4,7 @@ import { dirname, join, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { getConfigDir } from "../config/paths.js";
 import type { Settings } from "../config/settings.js";
+import { findGitRoot, walkUpDirs } from "./workspace.js";
 
 const AGENTS_DIR = ".agents";
 const GLOBAL_AGENTS_SKILLS = join(homedir(), ".agents", "skills");
@@ -111,32 +112,6 @@ function loadSkillFromPath(skillPath: string): SkillInfo | undefined {
     location: resolve(skillPath),
     content: parsed.content,
   };
-}
-
-function findGitRoot(start: string): string {
-  let dir = resolve(start);
-  while (true) {
-    if (existsSync(join(dir, ".git"))) return dir;
-    const parent = dirname(dir);
-    if (parent === dir) return resolve(start);
-    dir = parent;
-  }
-}
-
-function walkUpDirs(start: string, stop: string): string[] {
-  const dirs: string[] = [];
-  let current = resolve(start);
-  const stopAt = resolve(stop);
-
-  while (true) {
-    dirs.push(current);
-    if (current === stopAt) break;
-    const parent = dirname(current);
-    if (parent === current) break;
-    current = parent;
-  }
-
-  return dirs;
 }
 
 function collectSkillMdFiles(skillsRoot: string): string[] {

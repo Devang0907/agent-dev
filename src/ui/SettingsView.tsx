@@ -6,6 +6,7 @@ import { getCompactionSettings, DEFAULT_COMPACTION_SETTINGS } from "../config/se
 import type { ThinkingLevel, ProviderId } from "../providers/types.js";
 import { PROVIDER_ENV_VARS, hasProviderAuth } from "../providers/registry.js";
 import { LeftBorder } from "./LeftBorder.js";
+import { loadMergedPermissionRules, countPermissionRules } from "../agent/permissions.js";
 
 const THINKING_LEVELS: ThinkingLevel[] = ["off", "minimal", "low", "medium", "high"];
 const PROVIDERS: ProviderId[] = ["openai", "anthropic", "groq", "gemini", "free"];
@@ -13,6 +14,7 @@ const PROVIDERS: ProviderId[] = ["openai", "anthropic", "groq", "gemini", "free"
 interface SettingsViewProps {
   theme: ThemeColors;
   settings: Settings;
+  workdir: string;
   viewportHeight: number;
   contentWidth: number;
   onUpdate: (settings: Settings) => void;
@@ -41,6 +43,7 @@ function truncate(text: string, max: number): string {
 export function SettingsView({
   theme,
   settings,
+  workdir,
   viewportHeight,
   contentWidth,
   onUpdate,
@@ -48,6 +51,11 @@ export function SettingsView({
   onClose,
 }: SettingsViewProps) {
   const compaction = getCompactionSettings(settings);
+  const permissionCounts = countPermissionRules(loadMergedPermissionRules(workdir, settings));
+  const permissionSummary = (["bash", "git", "database", "mcp", "browser"] as const)
+    .filter((c) => permissionCounts[c] > 0)
+    .map((c) => `${c}: ${permissionCounts[c]} rules`)
+    .join(" · ");
   const items = ["thinkingLevel", "compaction", ...PROVIDERS];
   const [index, setIndex] = useState(0);
 
@@ -106,6 +114,17 @@ export function SettingsView({
           <Text color={theme.textMuted}>
             {"  "}reserve {compaction.reserveTokens?.toLocaleString()} · keep{" "}
             {compaction.keepRecentTokens?.toLocaleString()} tokens
+          </Text>
+
+          <Box marginTop={1}>
+            <Text color={theme.textMuted}>Permission presets</Text>
+          </Box>
+          <Text color={theme.textMuted}>
+            {"  "}
+            {permissionSummary || "none configured (gated tools default to ask)"}
+          </Text>
+          <Text color={theme.textMuted}>
+            {"  "}Edit ~/.agent-dev/settings.json or .agent-dev/permissions.json · /permissions
           </Text>
 
           <Box marginTop={1}>

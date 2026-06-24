@@ -34,6 +34,8 @@ import {
 } from "./browser/detectors.js";
 import { BROWSER_INTERACTION_ACTIONS } from "./browser/types.js";
 import type { BrowserToolArgs } from "./browser/types.js";
+import { resolveToolPermission } from "../permissions.js";
+import type { Settings } from "../../config/settings.js";
 
 export interface AgentTool {
   definition: ToolDefinition;
@@ -69,7 +71,7 @@ export const BUILTIN_TOOLS: AgentTool[] = [
 /** @deprecated Use needsToolPermission instead */
 export const PERMISSION_REQUIRED_TOOLS = new Set(["bash"]);
 
-export function needsToolPermission(name: string, args: Record<string, unknown>): boolean {
+function defaultNeedsToolPermission(name: string, args: Record<string, unknown>): boolean {
   if (name === "bash" || name === "exec") return true;
   if (name === "git") return isGitWriteAction(String(args.action ?? ""));
   if (name === "database") return !isSelectOnlyQuery(String(args.query ?? ""));
@@ -82,6 +84,21 @@ export function needsToolPermission(name: string, args: Record<string, unknown>)
   }
   return false;
 }
+
+export function needsToolPermission(
+  name: string,
+  args: Record<string, unknown>,
+  workdir?: string,
+  settings?: Settings,
+): boolean {
+  if (workdir && settings) {
+    return resolveToolPermission(name, args, workdir, settings) === "ask";
+  }
+  return defaultNeedsToolPermission(name, args);
+}
+
+export { resolveToolPermission } from "../permissions.js";
+export type { PermissionAction } from "../permissions.js";
 
 export function formatPermissionCommand(name: string, args: Record<string, unknown>): string {
   if (name === "bash" || name === "exec") {

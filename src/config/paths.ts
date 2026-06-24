@@ -49,6 +49,10 @@ export function getScreenshotsDir(): string {
   return join(getConfigDir(), "screenshots");
 }
 
+export function getProjectPermissionsPath(workdir: string): string {
+  return join(workdir, ".agent-dev", "permissions.json");
+}
+
 /** @deprecated Use getConfigDir() */
 export const CONFIG_DIR = getConfigDir();
 /** @deprecated Use getSettingsPath() */

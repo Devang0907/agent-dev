@@ -9,7 +9,7 @@ import {
 import { streamChat as defaultStreamChat } from "../providers/registry.js";
 import type { ChatMessage, Model, ToolCall } from "../providers/types.js";
 import type { Settings } from "../config/settings.js";
-import { getToolDefinitions, executeTool, needsToolPermission, formatPermissionCommand, checkPlanModeToolBlock } from "./tools/index.js";
+import { getToolDefinitions, executeTool, needsToolPermission, formatPermissionCommand, checkPlanModeToolBlock, resolveToolPermission } from "./tools/index.js";
 import { setSkillContext } from "./skills.js";
 import { setBrowserContext } from "./tools/browser-context.js";
 import type { AgentMode } from "./mode.js";
@@ -178,7 +178,13 @@ async function runToolBatch(
     }
 
     let result: string;
-    const needsPermission = needsToolPermission(tc.name, args);
+    const permissionAction =
+      settings != null
+        ? resolveToolPermission(tc.name, args, workdir, settings)
+        : needsToolPermission(tc.name, args)
+          ? "ask"
+          : "allow";
+    const command = formatPermissionCommand(tc.name, args);
 
     const runExecute = async (): Promise<string> => {
       if (tc.name === "browser" && sessionId) {
@@ -217,18 +223,20 @@ async function runToolBatch(
       return executeTool(tc.name, args, workdir, sessionId);
     };
 
-    if (needsPermission && onPermissionRequest) {
+    if (permissionAction === "deny") {
+      result = `Command denied by permission policy: ${command}`;
+    } else if (permissionAction === "allow") {
+      result = await runExecute();
+    } else if (onPermissionRequest) {
       const approved = await onPermissionRequest({
         toolCallId: tc.id,
         name: tc.name,
         args,
-        command: formatPermissionCommand(tc.name, args),
+        command,
       });
       result = approved ? await runExecute() : "Command execution denied by user.";
-    } else if (needsPermission) {
-      result = "Command execution denied — permission handler not available.";
     } else {
-      result = await runExecute();
+      result = "Command execution denied — permission handler not available.";
     }
 
     onEvent({ type: "tool_result", toolCallId: tc.id, name: tc.name, result });

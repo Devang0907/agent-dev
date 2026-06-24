@@ -7,6 +7,8 @@ export const SLASH_COMMANDS = [
   { cmd: "/boss", desc: "Toggle boss orchestrator mode" },
   { cmd: "/trace", desc: "Show latest worker trace log path" },
   { cmd: "/compact", desc: "Summarize older messages to free context" },
+  { cmd: "/rules", desc: "Show loaded project rule files" },
+  { cmd: "/permissions", desc: "Show permission presets for this project" },
   { cmd: "/tasks", desc: "Show the active task plan (use /tasks clear to reset)" },
   { cmd: "/skills", desc: "Browse and install Vercel skills" },
   { cmd: "/skill", desc: "Load a skill for one turn" },

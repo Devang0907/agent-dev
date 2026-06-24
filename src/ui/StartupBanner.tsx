@@ -28,6 +28,7 @@ interface StartupBannerProps {
   tagline?: string;
   animated?: boolean;
   updateInfo?: UpdateInfo | null;
+  projectRulesCount?: number;
 }
 
 type ThemeAccents = {
@@ -72,11 +73,17 @@ export const StartupBanner = memo(function StartupBanner({
   compact,
   tagline = "Autonomous coding agent for your terminal",
   updateInfo,
+  projectRulesCount,
 }: StartupBannerProps) {
   const accents = theme as ThemeAccents;
 
   const borderColor = accents.border ?? LOGO_COLOR;
   const dimColor = accents.dim ?? "gray";
+
+  const rulesHint =
+    !compact && projectRulesCount != null && projectRulesCount > 0
+      ? `AGENTS.md (${projectRulesCount} file${projectRulesCount === 1 ? "" : "s"})`
+      : null;
 
   if (compact) {
     return (
@@ -86,6 +93,7 @@ export const StartupBanner = memo(function StartupBanner({
             ✦ AGENT-DEV
           </Text>
           <Text color={dimColor}>{" · " + tagline}</Text>
+          {rulesHint ? <Text color={dimColor}>{" · " + rulesHint}</Text> : null}
         </Box>
         {updateInfo ? (
           <UpdateNotice theme={theme} updateInfo={updateInfo} dimColor={dimColor} compact />
@@ -114,6 +122,7 @@ export const StartupBanner = memo(function StartupBanner({
             ✦{" "}
           </Text>
           <Text color={dimColor}>{tagline}</Text>
+          {rulesHint ? <Text color={dimColor}>{" · " + rulesHint}</Text> : null}
         </Box>
 
         {updateInfo ? (

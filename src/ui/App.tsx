@@ -43,6 +43,8 @@ import { isModelCommand } from "./slash-commands.js";
 import { sanitizeErrorForUser } from "../providers/openai-compat.js";
 import { getLatestTracePath } from "../agent/orchestrator/trace.js";
 import { checkForUpdate, type UpdateInfo } from "../version/check.js";
+import { discoverProjectRules, formatProjectRulesSummary } from "../agent/project-rules.js";
+import { formatPermissionRulesSummary } from "../agent/permissions.js";
 
 let nextMessageId = 0;
 
@@ -526,6 +528,23 @@ export function App({ session, workdir, onQuit }: AppProps) {
         ]);
         return;
       }
+      if (value === "/rules") {
+        const rules = discoverProjectRules(workdir, settings);
+        setDisplayMessages((prev) => [
+          ...prev,
+          toDisplayMessage("user", value),
+          toDisplayMessage("assistant", formatProjectRulesSummary(rules)),
+        ]);
+        return;
+      }
+      if (value === "/permissions") {
+        setDisplayMessages((prev) => [
+          ...prev,
+          toDisplayMessage("user", value),
+          toDisplayMessage("assistant", formatPermissionRulesSummary(workdir, settings)),
+        ]);
+        return;
+      }
       if (value === "/compact" || value.startsWith("/compact ")) {
         const instructions = value.startsWith("/compact ")
           ? value.slice("/compact ".length).trim()
@@ -581,6 +600,11 @@ export function App({ session, workdir, onQuit }: AppProps) {
     [workdir, settings],
   );
 
+  const projectRulesCount = useMemo(
+    () => discoverProjectRules(workdir, settings).files.length,
+    [workdir, settings],
+  );
+
   const scrollHint =
     hasChat && maxScroll > 0
       ? following
@@ -613,6 +637,7 @@ export function App({ session, workdir, onQuit }: AppProps) {
         <SettingsView
           theme={theme}
           settings={settings}
+          workdir={workdir}
           viewportHeight={viewportHeight}
           contentWidth={contentWidth}
           onUpdate={(s) => {
@@ -716,7 +741,12 @@ export function App({ session, workdir, onQuit }: AppProps) {
         />
       ) : (
         <Box height={viewportHeight} overflow="hidden" flexShrink={0} paddingX={2}>
-          <StartupBanner theme={theme} compact={suggestionsOpen} updateInfo={updateInfo} />
+          <StartupBanner
+            theme={theme}
+            compact={suggestionsOpen}
+            updateInfo={updateInfo}
+            projectRulesCount={projectRulesCount}
+          />
         </Box>
       )}
 

@@ -4,6 +4,7 @@ import type { AgentMode } from "./mode.js";
 import { buildModeSystemAppend, getToolDefinitionsForMode, planModeSystemAppend } from "./mode.js";
 import { getPlatformContext } from "./platform.js";
 import { discoverSkills, formatSkillsCatalog } from "./skills.js";
+import { discoverProjectRules } from "./project-rules.js";
 import { loadMemorySummary } from "./tools/memory.js";
 import { loadPlanSummary } from "./tools/plan.js";
 
@@ -133,9 +134,11 @@ export function buildSystemPrompt(
   const memory = loadMemorySummary();
   const plan = loadPlanSummary(sessionId);
   const skills = formatSkillsCatalog(discoverSkills(workdir, settings));
+  const rules = discoverProjectRules(workdir, settings);
   const extras: string[] = [];
 
   if (skills) extras.push(skills);
+  if (rules.text) extras.push(`Project rules:\n${rules.text}`);
   if (memory) extras.push("Stored memories:\n" + memory);
   if (plan) extras.push("Active plan:\n" + plan);
 

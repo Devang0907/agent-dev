@@ -33,6 +33,17 @@ export interface CompactionSettings {
   pruneToolOutputs?: boolean;
 }
 
+export interface ProjectRulesSettings {
+  enabled?: boolean;
+  maxChars?: number;
+}
+
+export type PermissionAction = "allow" | "ask" | "deny";
+export type PermissionRuleValue = PermissionAction | Record<string, PermissionAction>;
+export type PermissionRulesConfig = Partial<
+  Record<"bash" | "git" | "database" | "mcp" | "browser", PermissionRuleValue>
+>;
+
 export interface Settings {
   defaultProvider: ProviderId;
   defaultModel: string;
@@ -44,6 +55,8 @@ export interface Settings {
   telegram?: TelegramSettings;
   browser?: BrowserSettings;
   compaction?: CompactionSettings;
+  projectRules?: ProjectRulesSettings;
+  permissions?: PermissionRulesConfig;
 }
 
 export const DEFAULT_COMPACTION_SETTINGS: CompactionSettings = {
@@ -83,6 +96,21 @@ export function getCompactionSettings(settings: Settings): CompactionSettings {
   return parseCompactionSettings(settings.compaction);
 }
 
+const DEFAULT_PROJECT_RULES_SETTINGS: ProjectRulesSettings = {
+  enabled: true,
+  maxChars: 32_768,
+};
+
+export function getProjectRulesSettings(settings?: Settings): ProjectRulesSettings {
+  return {
+    enabled:
+      process.env.AGENT_NO_PROJECT_RULES === "1"
+        ? false
+        : (settings?.projectRules?.enabled ?? DEFAULT_PROJECT_RULES_SETTINGS.enabled),
+    maxChars: settings?.projectRules?.maxChars ?? DEFAULT_PROJECT_RULES_SETTINGS.maxChars,
+  };
+}
+
 export function loadSettings(): Settings {
   if (!existsSync(getSettingsPath())) {
     return { ...DEFAULT_SETTINGS };
@@ -112,6 +140,8 @@ export function loadSettings(): Settings {
       telegram: parsed.telegram,
       browser: parsed.browser,
       compaction: parseCompactionSettings(parsed.compaction),
+      projectRules: parsed.projectRules,
+      permissions: parsed.permissions,
     };
     if (migrated) saveSettings(settings);
     return settings;

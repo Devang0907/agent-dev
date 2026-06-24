@@ -1,5 +1,6 @@
 import { runAgentLoop, type AgentEvent } from "../../src/agent/loop.js";
 import type { ChatMessage, Model } from "../../src/providers/types.js";
+import type { Settings } from "../../src/config/settings.js";
 import { sampleSettings } from "../fixtures/sample-settings.js";
 import { streamChatFromScript, type StreamScript } from "./mock-stream.js";
 
@@ -17,6 +18,7 @@ export async function runLoopWithScript(opts: {
   sessionId?: string;
   agentMode?: "build" | "plan";
   allowedTools?: string[];
+  settings?: Settings;
   onPermission?: (req: { name: string; command: string }) => boolean;
 }): Promise<{ events: AgentEvent[]; messages: ChatMessage[] }> {
   const events: AgentEvent[] = [];
@@ -32,7 +34,7 @@ export async function runLoopWithScript(opts: {
   const newMessages = await runAgentLoop({
     model: TEST_MODEL,
     messages: opts.messages ?? [{ role: "user", content: "test" }],
-    settings: sampleSettings({ agentMode: opts.agentMode }),
+    settings: opts.settings ?? sampleSettings({ agentMode: opts.agentMode }),
     workdir: opts.workdir ?? process.cwd(),
     agentMode: opts.agentMode,
     allowedTools: opts.allowedTools,

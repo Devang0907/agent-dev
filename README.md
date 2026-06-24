@@ -212,6 +212,8 @@ Timing options the agent can set: `in_minutes` (e.g. 5), `daily_at` in 24h local
 | `/boss` | Toggle boss orchestrator mode |
 | `/tasks` | Show the active task plan |
 | `/compact [instructions]` | Summarize older messages to free context (optional focus) |
+| `/rules` | List loaded project rule files (`AGENTS.md`, etc.) |
+| `/permissions` | Show merged permission presets for this project |
 | `/trace` | Show path to the latest worker trace log |
 | `/sessions` | Browse and load saved chat sessions |
 | `/settings` | Thinking level and API key status |
@@ -253,6 +255,71 @@ Toggle auto-compaction in `/settings` or `settings.json`:
 ```
 
 Telegram: `/compact` (same as TUI).
+
+## Project rules
+
+Project rules are markdown instructions (Pi/Cursor-style) injected into the system prompt automatically.
+
+**Discovery order** (root → specific; all matching files are concatenated):
+
+| Priority | Path |
+|----------|------|
+| 1 | `~/.agent-dev/AGENTS.md` |
+| 2 | `AGENTS.md` or `CLAUDE.md` from git root down to cwd |
+| 3 | `<workdir>/.agent-dev/AGENTS.md` |
+| 4 | `<workdir>/.agent-dev/rules/*.md` (sorted by filename) |
+
+Use `/rules` in the TUI to see which files were loaded. Total injected size is capped (default 32k characters).
+
+Disable with `AGENT_NO_PROJECT_RULES=1` or in `settings.json`:
+
+```json
+{
+  "projectRules": {
+    "enabled": false,
+    "maxChars": 32768
+  }
+}
+```
+
+Boss worker sessions do not inherit project rules in v1 (main agent loop only).
+
+## Permission presets
+
+Gated tools (shell, git writes, DB mutations, MCP `call_tool`, destructive browser actions) normally prompt for approval. Permission presets let you **allow**, **ask**, or **deny** by pattern.
+
+**Config** (project patterns append to global; **last matching rule wins**):
+
+| Scope | Path |
+|-------|------|
+| Global | `~/.agent-dev/settings.json` → `permissions` |
+| Project | `<workdir>/.agent-dev/permissions.json` |
+
+Example `permissions.json`:
+
+```json
+{
+  "bash": {
+    "*": "ask",
+    "npm test": "allow",
+    "npm test *": "allow",
+    "rm *": "deny"
+  },
+  "git": {
+    "commit": "ask",
+    "push *": "deny"
+  },
+  "database": { "*": "ask", "SELECT *": "allow" },
+  "mcp": { "call_tool": "ask" },
+  "browser": { "*": "ask" }
+}
+```
+
+Shorthand: `"bash": "ask"` expands to `{ "*": "ask" }`. Put `"*": "ask"` first, then more specific patterns after.
+
+Use `/permissions` to inspect merged rules. `/settings` shows a rule count summary.
+
+Read-only git commands and `SELECT` queries stay allowed regardless of rules.
 
 ## Agent modes
 
@@ -428,7 +495,7 @@ All config lives under `~/.agent-dev/` (override with `AGENT_DEV_DIR`):
 
 | Path | Purpose |
 |------|---------|
-| `settings.json` | Default provider/model, thinking level, agent mode, orchestrator mode, API keys, skills |
+| `settings.json` | Default provider/model, thinking level, agent mode, orchestrator mode, API keys, skills, permissions, project rules |
 | `sessions/*.jsonl` | Chat history (one file per session) |
 | `last-session.json` | Pointer to resume with `-c` |
 | `memory.json` | Cross-session memory |
@@ -451,6 +518,12 @@ Example `settings.json`:
     "enabled": true,
     "reserveTokens": 16384,
     "keepRecentTokens": 20000
+  },
+  "permissions": {
+    "bash": { "*": "ask", "npm test *": "allow" }
+  },
+  "projectRules": {
+    "enabled": true
   }
 }
 ```
@@ -471,6 +544,7 @@ Set `orchestratorMode` to `"boss"` to enable boss mode by default.
 | `AGENT_MAX_DELEGATIONS` | Max worker delegations per boss turn (default `10`) |
 | `AGENT_COMPACTION_ENABLED` | `0`/`false` to disable auto-compaction |
 | `AGENT_COMPACTION_RESERVE_TOKENS` | Tokens reserved for model response (default `16384`) |
+| `AGENT_NO_PROJECT_RULES` | `1` to disable project rules injection |
 | `TELEGRAM_BOT_TOKEN` | Telegram bot token (overrides settings) |
 | `TELEGRAM_ALLOWED_USER_IDS` | Comma-separated Telegram user IDs |
 
