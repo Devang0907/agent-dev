@@ -18,7 +18,24 @@ import {
 import { clearLegacyGlobalPlan } from "./tools/plan.js";
 import { closeBrowserSession } from "./tools/browser/session.js";
 import { SessionManager } from "../session/manager.js";
+import type { CompactionReason } from "../session/manager.js";
 import { generateSessionTitle, fallbackTitle } from "../session/title.js";
+import {
+  runCompaction,
+  estimateContextTokens,
+  getContextWindow,
+  shouldCompact,
+  formatTokenCount,
+} from "./compaction/index.js";
+import { getCompactionSettings } from "../config/settings.js";
+
+export interface ContextUsageState {
+  tokens: number;
+  window: number;
+  percent: number;
+  inputTokens?: number;
+  outputTokens?: number;
+}
 
 export type SessionEvent =
   | AgentEvent
@@ -28,7 +45,15 @@ export type SessionEvent =
   | { type: "orchestrator_mode_changed"; mode: OrchestratorMode }
   | { type: "session_title"; title: string }
   | { type: "permission_request"; request: PermissionRequest }
-  | { type: "interaction_request"; request: InteractionRequest };
+  | { type: "interaction_request"; request: InteractionRequest }
+  | { type: "compacting" }
+  | {
+      type: "compaction_done";
+      tokensBefore: number;
+      tokensAfter: number;
+      summaryPreview: string;
+      reason: CompactionReason;
+    };
 
 export class AgentSession extends EventEmitter {
   private messages: ChatMessage[] = [];
@@ -41,6 +66,9 @@ export class AgentSession extends EventEmitter {
   private pendingPermission?: (approved: boolean) => void;
   private pendingInteraction?: (value: string | null) => void;
   private lastLoopMode: AgentMode = "build";
+  private contextUsage: ContextUsageState = { tokens: 0, window: 128_000, percent: 0 };
+  private lastStreamUsage?: { inputTokens?: number; outputTokens?: number };
+  private compactedThisTurn = false;
 
   constructor(
     settings: Settings,
@@ -62,6 +90,82 @@ export class AgentSession extends EventEmitter {
         ? fromSettings
         : available[0] ?? findModel("free", "meta-llama/llama-3.3-70b-instruct:free")!);
     this.lastLoopMode = this.settings.agentMode ?? "build";
+    this.refreshContextUsage();
+  }
+
+  getContextUsage(): ContextUsageState {
+    return { ...this.contextUsage };
+  }
+
+  private refreshContextUsage(lastUsage?: { inputTokens?: number; outputTokens?: number }): void {
+    const ctx = this.sessionManager.getContextMessages();
+    const estimate = estimateContextTokens(ctx, lastUsage ?? this.lastStreamUsage);
+    const window = getContextWindow(this.model);
+    this.contextUsage = {
+      tokens: estimate.tokens,
+      window,
+      percent: window > 0 ? Math.min(100, Math.round((estimate.tokens / window) * 100)) : 0,
+      inputTokens: lastUsage?.inputTokens ?? this.lastStreamUsage?.inputTokens,
+      outputTokens: lastUsage?.outputTokens ?? this.lastStreamUsage?.outputTokens,
+    };
+  }
+
+  async compact(options?: {
+    customInstructions?: string;
+    reason?: CompactionReason;
+  }): Promise<{ ok: true; message: string } | { ok: false; message: string }> {
+    if (this.running && options?.reason === "manual") {
+      return { ok: false, message: "Cannot compact while the agent is running." };
+    }
+
+    const reason = options?.reason ?? "manual";
+    this.emit("event", { type: "compacting" } satisfies SessionEvent);
+
+    try {
+      const result = await runCompaction({
+        sessionManager: this.sessionManager,
+        model: this.model,
+        settings: this.settings,
+        reason,
+        customInstructions: options?.customInstructions,
+        signal: this.abortController?.signal,
+      });
+
+      this.refreshContextUsage();
+      const preview =
+        result.summary.length > 400 ? result.summary.slice(0, 400) + "…" : result.summary;
+      this.emit("event", {
+        type: "compaction_done",
+        tokensBefore: result.tokensBefore,
+        tokensAfter: result.tokensAfter,
+        summaryPreview: preview,
+        reason,
+      } satisfies SessionEvent);
+
+      const message = `Context compacted (${formatTokenCount(result.tokensBefore)} → ${formatTokenCount(result.tokensAfter)} tokens). Full history preserved in session file.`;
+      return { ok: true, message };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { ok: false, message };
+    }
+  }
+
+  private async maybeAutoCompact(): Promise<void> {
+    if (this.compactedThisTurn) return;
+    const compactionSettings = getCompactionSettings(this.settings);
+    const ctx = this.sessionManager.getContextMessages();
+    const tokens = estimateContextTokens(ctx, this.lastStreamUsage).tokens;
+    const window = getContextWindow(this.model);
+    if (!shouldCompact(tokens, window, compactionSettings)) return;
+
+    const result = await this.compact({ reason: "threshold" });
+    if (result.ok) {
+      this.compactedThisTurn = true;
+    }
+  }
+
+  private getLoopMessages(): ChatMessage[] {
+    return this.sessionManager.getContextMessages();
   }
 
   getAgentMode(): AgentMode {
@@ -132,10 +236,27 @@ export class AgentSession extends EventEmitter {
         systemPrompt: isBoss ? buildBossSystemPrompt() : undefined,
         allowedTools: isBoss ? [...BOSS_TOOL_NAMES] : undefined,
         signal: this.abortController?.signal,
-        onEvent: (event) => this.emit("event", event),
+        onEvent: (event) => {
+          if (event.type === "context_usage") {
+            this.lastStreamUsage = {
+              inputTokens: event.inputTokens,
+              outputTokens: event.outputTokens,
+            };
+            this.refreshContextUsage(this.lastStreamUsage);
+          }
+          this.emit("event", event);
+        },
         onPermissionRequest: (request) => this.requestCommandPermission(request),
         onInteractionRequest: (request) => this.requestInteraction(request),
         sessionId: this.getSessionId(),
+        onContextOverflow: async () => {
+          const result = await this.compact({ reason: "overflow" });
+          if (result.ok) {
+            this.compactedThisTurn = true;
+            return true;
+          }
+          return false;
+        },
       });
     } finally {
       if (isBoss) setDelegationContext(null);
@@ -178,6 +299,7 @@ export class AgentSession extends EventEmitter {
     this.model = model;
     this.settings = setDefaultModel(this.settings, model.provider, model.id);
     this.sessionManager.appendModelChange(model);
+    this.refreshContextUsage();
     this.emit("event", { type: "model_changed", model } satisfies SessionEvent);
   }
 
@@ -268,9 +390,14 @@ export class AgentSession extends EventEmitter {
       }
 
       this.abortController = new AbortController();
+      this.compactedThisTurn = false;
 
       try {
-        const loopMessages = [...this.messages.slice(0, -1), { role: "user" as const, content: agentContent }];
+        await this.maybeAutoCompact();
+        const loopMessages = [
+          ...this.getLoopMessages().slice(0, -1),
+          { role: "user" as const, content: agentContent },
+        ];
         const newMessages = await this.runLoop(loopMessages);
 
         for (const msg of newMessages) {
@@ -301,9 +428,11 @@ export class AgentSession extends EventEmitter {
     }
 
     this.abortController = new AbortController();
+    this.compactedThisTurn = false;
 
     try {
-      const newMessages = await this.runLoop([...this.messages]);
+      await this.maybeAutoCompact();
+      const newMessages = await this.runLoop(this.getLoopMessages());
 
       for (const msg of newMessages) {
         if (msg.role !== "user") {
@@ -323,7 +452,10 @@ export class AgentSession extends EventEmitter {
     if (this.running) return;
     this.messages = [];
     this.sessionManager = new SessionManager(undefined, this.workdir);
+    this.lastStreamUsage = undefined;
+    this.compactedThisTurn = false;
     clearLegacyGlobalPlan();
+    this.refreshContextUsage();
     this.sessionManager.saveAsLast();
   }
 
@@ -331,6 +463,9 @@ export class AgentSession extends EventEmitter {
     if (this.running) return;
     this.sessionManager = new SessionManager(sessionId);
     this.messages = this.sessionManager.getMessages();
+    this.lastStreamUsage = undefined;
+    this.compactedThisTurn = false;
+    this.refreshContextUsage();
     this.sessionManager.saveAsLast();
   }
 

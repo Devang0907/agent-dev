@@ -8,11 +8,11 @@ const BASE_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION = "2023-06-01";
 
 export const MODELS: Model[] = [
-  { provider: PROVIDER_ID, id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6" },
-  { provider: PROVIDER_ID, id: "claude-opus-4-8", name: "Claude Opus 4.8" },
-  { provider: PROVIDER_ID, id: "claude-opus-4-6", name: "Claude Opus 4.6" },
-  { provider: PROVIDER_ID, id: "claude-haiku-4-5-20251001", name: "Claude Haiku 4.5" },
-  { provider: PROVIDER_ID, id: "claude-sonnet-4-5-20250929", name: "Claude Sonnet 4.5" },
+  { provider: PROVIDER_ID, id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6", contextWindow: 200_000 },
+  { provider: PROVIDER_ID, id: "claude-opus-4-8", name: "Claude Opus 4.8", contextWindow: 200_000 },
+  { provider: PROVIDER_ID, id: "claude-opus-4-6", name: "Claude Opus 4.6", contextWindow: 200_000 },
+  { provider: PROVIDER_ID, id: "claude-haiku-4-5-20251001", name: "Claude Haiku 4.5", contextWindow: 200_000 },
+  { provider: PROVIDER_ID, id: "claude-sonnet-4-5-20250929", name: "Claude Sonnet 4.5", contextWindow: 200_000 },
 ];
 
 type AnthropicContentBlock =

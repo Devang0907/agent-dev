@@ -63,6 +63,24 @@ export function formatModelList(session: AgentSession): string {
   return lines.join("\n");
 }
 
+export function applyCompact(
+  session: AgentSession,
+  instructions?: string,
+): Promise<string> {
+  return session.compact({ reason: "manual", customInstructions: instructions }).then((result) => {
+    if (result.ok) {
+      logGateway("Context compacted");
+      return result.message;
+    }
+    return result.message;
+  });
+}
+
+export function formatContextStatus(session: AgentSession): string {
+  const usage = session.getContextUsage();
+  return `Context: ${usage.tokens.toLocaleString()} / ${usage.window.toLocaleString()} tokens (${usage.percent}%)`;
+}
+
 export function applyModel(session: AgentSession, ref: string): string {
   const model = parseModelRef(ref.trim());
   if (!model) {

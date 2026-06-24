@@ -12,6 +12,10 @@ describe("matchSlashCommands", () => {
     expect(matches.some((m) => m.cmd === "/tasks")).toBe(true);
   });
 
+  it("matches /compact", () => {
+    expect(matchSlashCommands("/compact").some((m) => m.cmd === "/compact")).toBe(true);
+  });
+
   it("matches /m alias", () => {
     expect(matchSlashCommands("/m").some((m) => m.cmd === "/model")).toBe(true);
   });

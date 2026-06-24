@@ -6,6 +6,8 @@ import type { OrchestratorMode } from "../config/settings.js";
 import { modelRef } from "../config/models.js";
 import type { UpdateInfo } from "../version/check.js";
 import { UPDATE_COMMAND } from "../version/check.js";
+import type { ContextUsageState } from "../agent/session.js";
+import { formatTokenCount } from "../agent/compaction/tokens.js";
 
 interface FooterProps {
   workdir: string;
@@ -14,6 +16,7 @@ interface FooterProps {
   scrollHint?: string;
   orchestratorMode?: OrchestratorMode;
   updateInfo?: UpdateInfo | null;
+  contextUsage?: ContextUsageState;
 }
 
 function shortPath(path: string, max = 56): string {
@@ -21,7 +24,7 @@ function shortPath(path: string, max = 56): string {
   return "…" + path.slice(-(max - 1));
 }
 
-export function Footer({ workdir, model, theme, scrollHint, orchestratorMode, updateInfo }: FooterProps) {
+export function Footer({ workdir, model, theme, scrollHint, orchestratorMode, updateInfo, contextUsage }: FooterProps) {
   return (
     <Box
       borderStyle="single"
@@ -42,6 +45,14 @@ export function Footer({ workdir, model, theme, scrollHint, orchestratorMode, up
         ) : null}
         {orchestratorMode === "boss" ? " · " : null}
         <Text color={theme.text}>{modelRef(model)}</Text>
+        {contextUsage && contextUsage.tokens > 0 && (
+          <>
+            {"  "}
+            <Text color={contextUsage.percent >= 85 ? theme.warning : theme.textMuted}>
+              ctx {formatTokenCount(contextUsage.tokens)}/{formatTokenCount(contextUsage.window)}
+            </Text>
+          </>
+        )}
         {scrollHint && (
           <>
             {"  "}

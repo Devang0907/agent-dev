@@ -26,6 +26,13 @@ export interface BrowserSettings {
   profileDir?: string;
 }
 
+export interface CompactionSettings {
+  enabled?: boolean;
+  reserveTokens?: number;
+  keepRecentTokens?: number;
+  pruneToolOutputs?: boolean;
+}
+
 export interface Settings {
   defaultProvider: ProviderId;
   defaultModel: string;
@@ -36,7 +43,15 @@ export interface Settings {
   skills?: SkillsSettings;
   telegram?: TelegramSettings;
   browser?: BrowserSettings;
+  compaction?: CompactionSettings;
 }
+
+export const DEFAULT_COMPACTION_SETTINGS: CompactionSettings = {
+  enabled: true,
+  reserveTokens: 16_384,
+  keepRecentTokens: 20_000,
+  pruneToolOutputs: true,
+};
 
 const DEFAULT_SETTINGS: Settings = {
   defaultProvider: "free",
@@ -44,7 +59,29 @@ const DEFAULT_SETTINGS: Settings = {
   thinkingLevel: "off",
   agentMode: "build",
   orchestratorMode: "off",
+  compaction: { ...DEFAULT_COMPACTION_SETTINGS },
 };
+
+function parseCompactionSettings(raw?: CompactionSettings): CompactionSettings {
+  const envEnabled = process.env.AGENT_COMPACTION_ENABLED;
+  const envReserve = process.env.AGENT_COMPACTION_RESERVE_TOKENS;
+  return {
+    enabled:
+      envEnabled !== undefined
+        ? !/^(0|false|no)$/i.test(envEnabled)
+        : (raw?.enabled ?? DEFAULT_COMPACTION_SETTINGS.enabled),
+    reserveTokens:
+      envReserve && Number.isFinite(Number(envReserve))
+        ? Number(envReserve)
+        : (raw?.reserveTokens ?? DEFAULT_COMPACTION_SETTINGS.reserveTokens),
+    keepRecentTokens: raw?.keepRecentTokens ?? DEFAULT_COMPACTION_SETTINGS.keepRecentTokens,
+    pruneToolOutputs: raw?.pruneToolOutputs ?? DEFAULT_COMPACTION_SETTINGS.pruneToolOutputs,
+  };
+}
+
+export function getCompactionSettings(settings: Settings): CompactionSettings {
+  return parseCompactionSettings(settings.compaction);
+}
 
 export function loadSettings(): Settings {
   if (!existsSync(getSettingsPath())) {
@@ -74,6 +111,7 @@ export function loadSettings(): Settings {
       skills: parsed.skills,
       telegram: parsed.telegram,
       browser: parsed.browser,
+      compaction: parseCompactionSettings(parsed.compaction),
     };
     if (migrated) saveSettings(settings);
     return settings;

@@ -20,8 +20,10 @@ import {
   applyAgentMode,
   applyBossMode,
   applyModel,
+  applyCompact,
   formatModeStatus,
   formatModelList,
+  formatContextStatus,
   parseBossArg,
   toggleBossMode,
 } from "./commands.js";
@@ -220,8 +222,27 @@ export async function runTelegramGateway(cliOptions: TelegramGatewayOptions & { 
         `Session: ${bridge.session.getSessionId()}`,
         `Mode: ${bridge.session.getAgentMode()}${boss ? " · BOSS" : ""}`,
         `Status: ${running ? "busy" : "idle"}`,
+        formatContextStatus(bridge.session),
       ].join("\n"),
     );
+  });
+
+  bot.command("compact", async (ctx) => {
+    const chatId = ctx.chat?.id;
+    const userId = ctx.from?.id;
+    if (!chatId || !userId) return;
+
+    const arg = typeof ctx.match === "string" ? ctx.match.trim() : "";
+    logUserCommand(userId, `/compact${arg ? ` ${arg}` : ""}`);
+
+    const bridge = getOrCreateBridge(chatId);
+    if (bridge.session.isRunning()) {
+      await ctx.reply("Cannot compact while the agent is running. Use /stop first.");
+      return;
+    }
+
+    const message = await applyCompact(bridge.session, arg || undefined);
+    await ctx.reply(message);
   });
 
   bot.command("stop", async (ctx) => {

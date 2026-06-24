@@ -18,6 +18,7 @@ import {
   buildSystemPrompt,
   systemPromptForModel,
 } from "./system-prompt.js";
+import { isContextOverflowError } from "./compaction/tokens.js";
 
 export interface InteractionRequest {
   toolCallId: string;
@@ -47,6 +48,7 @@ export type CoreAgentEvent =
   | { type: "tool_call"; toolCall: ToolCall }
   | { type: "tool_progress"; toolCallId: string; name: string; message: string }
   | { type: "tool_result"; toolCallId: string; name: string; result: string }
+  | { type: "context_usage"; inputTokens?: number; outputTokens?: number; estimatedTotal?: number }
   | { type: "turn_end" }
   | { type: "error"; message: string };
 
@@ -78,6 +80,7 @@ export interface AgentLoopOptions {
   onInteractionRequest?: (request: InteractionRequest) => Promise<string | null>;
   sessionId?: string;
   streamChatOverride?: typeof defaultStreamChat;
+  onContextOverflow?: () => Promise<boolean>;
 }
 
 function isToolUseFailedError(message: string): boolean {
@@ -254,10 +257,11 @@ async function collectStream(
   signal?: AbortSignal,
   onEvent?: (event: AgentEvent) => void,
   streamChatFn: typeof defaultStreamChat = defaultStreamChat,
-): Promise<{ content: string; toolCalls: ToolCall[]; error?: string }> {
+): Promise<{ content: string; toolCalls: ToolCall[]; error?: string; usage?: { inputTokens?: number; outputTokens?: number } }> {
   const tools = getToolDefinitions(agentMode, allowedTools);
   let content = "";
   const toolCallMap: Map<number, ToolCall> = new Map();
+  let usage: { inputTokens?: number; outputTokens?: number } | undefined;
 
   const stream = streamChatFn(
     model,
@@ -284,12 +288,14 @@ async function collectStream(
       if (event.name) tc.name = event.name;
       if (event.argumentsDelta) tc.arguments += event.argumentsDelta;
     } else if (event.type === "error") {
-      return { content, toolCalls: Array.from(toolCallMap.values()), error: event.message };
+      return { content, toolCalls: Array.from(toolCallMap.values()), error: event.message, usage };
+    } else if (event.type === "done" && event.usage) {
+      usage = event.usage;
     }
   }
 
   const toolCalls = normalizeToolCalls(Array.from(toolCallMap.values()).filter((tc) => tc.name));
-  return { content, toolCalls };
+  return { content, toolCalls, usage };
 }
 
 function lastToolResult(context: ChatMessage[]): string | undefined {
@@ -333,10 +339,12 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<ChatMessa
     onInteractionRequest,
     sessionId,
     streamChatOverride,
+    onContextOverflow,
   } = options;
 
   const context = [...messages];
   const callCounts = new Map<string, number>();
+  let overflowRetried = false;
   setSkillContext({ workdir, settings });
   try {
   let effectivePrompt = systemPromptForModel(
@@ -360,7 +368,7 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<ChatMessa
 
     onEvent({ type: "message_start", role: "assistant" });
 
-    const { content, toolCalls, error } = await collectStream(
+    const { content, toolCalls, error, usage } = await collectStream(
       model,
       context,
       settings,
@@ -372,9 +380,26 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<ChatMessa
       streamChatOverride,
     );
 
+    if (usage) {
+      onEvent({
+        type: "context_usage",
+        inputTokens: usage.inputTokens,
+        outputTokens: usage.outputTokens,
+        estimatedTotal: (usage.inputTokens ?? 0) + (usage.outputTokens ?? 0),
+      });
+    }
+
     const uniqueCalls = resolveToolCalls(content, toolCalls, error);
 
     if (error && uniqueCalls.length === 0) {
+      if (isContextOverflowError(error) && onContextOverflow && !overflowRetried) {
+        overflowRetried = true;
+        const recovered = await onContextOverflow();
+        if (recovered) {
+          toolRound--;
+          continue;
+        }
+      }
       if (isToolUseFailedError(error) && hadSuccessfulToolResults(context)) {
         finishGracefully(context, content, onEvent);
         break;

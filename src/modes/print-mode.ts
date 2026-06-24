@@ -54,6 +54,7 @@ function isCoreAgentEvent(event: SessionEvent): event is CoreAgentEvent {
     event.type === "tool_call" ||
     event.type === "tool_progress" ||
     event.type === "tool_result" ||
+    event.type === "context_usage" ||
     event.type === "turn_end" ||
     event.type === "error"
   );
@@ -125,6 +126,18 @@ export async function runPrintMode(session: AgentSession, prompt: string): Promi
       } else if (inner.type === "tool_result") {
         console.log(prefix + chalk.gray(inner.result.slice(0, 500)));
       }
+      return;
+    }
+    if (event.type === "compacting") {
+      console.error(chalk.gray("[compaction] Summarizing older context…"));
+      return;
+    }
+    if (event.type === "compaction_done") {
+      console.error(
+        chalk.gray(
+          `[compaction] Done (${event.tokensBefore.toLocaleString()} → ${event.tokensAfter.toLocaleString()} tokens, ${event.reason})`,
+        ),
+      );
       return;
     }
     if (!isCoreAgentEvent(event)) return;

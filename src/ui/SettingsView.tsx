@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Box, Text, useInput } from "ink";
 import type { ThemeColors } from "./theme.js";
 import type { Settings } from "../config/settings.js";
+import { getCompactionSettings, DEFAULT_COMPACTION_SETTINGS } from "../config/settings.js";
 import type { ThinkingLevel, ProviderId } from "../providers/types.js";
 import { PROVIDER_ENV_VARS, hasProviderAuth } from "../providers/registry.js";
 import { LeftBorder } from "./LeftBorder.js";
@@ -46,7 +47,8 @@ export function SettingsView({
   onSetApiKey,
   onClose,
 }: SettingsViewProps) {
-  const items = ["thinkingLevel", ...PROVIDERS];
+  const compaction = getCompactionSettings(settings);
+  const items = ["thinkingLevel", "compaction", ...PROVIDERS];
   const [index, setIndex] = useState(0);
 
   const providerColWidth = 16;
@@ -63,6 +65,12 @@ export function SettingsView({
           const cur = THINKING_LEVELS.indexOf(settings.thinkingLevel);
           const next = THINKING_LEVELS[(cur + 1) % THINKING_LEVELS.length];
           onUpdate({ ...settings, thinkingLevel: next });
+        } else if (item === "compaction") {
+          const enabled = !(compaction.enabled ?? DEFAULT_COMPACTION_SETTINGS.enabled);
+          onUpdate({
+            ...settings,
+            compaction: { ...compaction, enabled },
+          });
         } else {
           onSetApiKey(item as ProviderId);
         }
@@ -90,11 +98,21 @@ export function SettingsView({
             {index === 0 && <Text color={theme.textMuted}> (Enter to cycle)</Text>}
           </Text>
 
+          <Text color={index === 1 ? theme.primary : theme.text}>
+            {index === 1 ? "› " : "  "}Auto-compact:{" "}
+            <Text bold>{compaction.enabled ? "on" : "off"}</Text>
+            {index === 1 && <Text color={theme.textMuted}> (Enter to toggle)</Text>}
+          </Text>
+          <Text color={theme.textMuted}>
+            {"  "}reserve {compaction.reserveTokens?.toLocaleString()} · keep{" "}
+            {compaction.keepRecentTokens?.toLocaleString()} tokens
+          </Text>
+
           <Box marginTop={1}>
             <Text color={theme.textMuted}>API keys</Text>
           </Box>
           {PROVIDERS.map((p, i) => {
-            const idx = i + 1;
+            const idx = i + 2;
             const ok = hasProviderAuth(p, settings);
             const selected = index === idx;
             const label = truncate(

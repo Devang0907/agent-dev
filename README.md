@@ -167,6 +167,7 @@ On Windows, run it in a dedicated terminal, or use Task Scheduler / [pm2](https:
 | `/model` | List available models |
 | `/model <provider/id>` | Switch model (e.g. `/model groq/llama-3.3-70b-versatile`) |
 | `/schedules` | List active reminders and daily tasks for this chat |
+| `/compact` | Summarize older messages to free context |
 
 ### Reminders and scheduled tasks
 
@@ -210,6 +211,7 @@ Timing options the agent can set: `in_minutes` (e.g. 5), `daily_at` in 24h local
 | `/plan` | Switch to Plan mode (read-only exploration) |
 | `/boss` | Toggle boss orchestrator mode |
 | `/tasks` | Show the active task plan |
+| `/compact [instructions]` | Summarize older messages to free context (optional focus) |
 | `/trace` | Show path to the latest worker trace log |
 | `/sessions` | Browse and load saved chat sessions |
 | `/settings` | Thinking level and API key status |
@@ -225,6 +227,32 @@ Timing options the agent can set: `in_minutes` (e.g. 5), `daily_at` in 24h local
 - **Esc** — abort a running turn
 - **Ctrl+G** — scroll chat to latest
 - **Ctrl+U** / **Ctrl+D** — scroll chat up/down
+
+## Context compaction
+
+Long sessions can exceed model context limits. agent-dev tracks approximate token usage (footer shows `ctx 42k/128k`) and compacts older history when needed.
+
+| Trigger | Behavior |
+|---------|----------|
+| **Auto** | Before each turn when `tokens > contextWindow - reserveTokens` (default reserve 16k) |
+| **Overflow** | On provider context errors — compact once and retry the turn |
+| **Manual** | `/compact` or `/compact focus on auth changes` |
+
+Compaction is **lossy for the model** but **non-destructive on disk**: full chat history stays in `sessions/*.jsonl`; a `compaction` entry records the summary and which messages the LLM still sees.
+
+Toggle auto-compaction in `/settings` or `settings.json`:
+
+```json
+{
+  "compaction": {
+    "enabled": true,
+    "reserveTokens": 16384,
+    "keepRecentTokens": 20000
+  }
+}
+```
+
+Telegram: `/compact` (same as TUI).
 
 ## Agent modes
 
@@ -418,7 +446,12 @@ Example `settings.json`:
   "defaultModel": "meta-llama/llama-3.3-70b-instruct:free",
   "thinkingLevel": "off",
   "agentMode": "build",
-  "orchestratorMode": "off"
+  "orchestratorMode": "off",
+  "compaction": {
+    "enabled": true,
+    "reserveTokens": 16384,
+    "keepRecentTokens": 20000
+  }
 }
 ```
 
@@ -436,6 +469,8 @@ Set `orchestratorMode` to `"boss"` to enable boss mode by default.
 | `AGENT_DEV_DIR` | Config directory (default `~/.agent-dev`) |
 | `AGENT_MAX_TOOL_ROUNDS` | Max tool-call rounds per turn (default `50`) |
 | `AGENT_MAX_DELEGATIONS` | Max worker delegations per boss turn (default `10`) |
+| `AGENT_COMPACTION_ENABLED` | `0`/`false` to disable auto-compaction |
+| `AGENT_COMPACTION_RESERVE_TOKENS` | Tokens reserved for model response (default `16384`) |
 | `TELEGRAM_BOT_TOKEN` | Telegram bot token (overrides settings) |
 | `TELEGRAM_ALLOWED_USER_IDS` | Comma-separated Telegram user IDs |
 

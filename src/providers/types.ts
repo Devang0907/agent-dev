@@ -6,6 +6,8 @@ export interface Model {
   provider: ProviderId;
   id: string;
   name: string;
+  /** Approximate context window in tokens */
+  contextWindow?: number;
 }
 
 export type MessageRole = "user" | "assistant" | "tool" | "system";

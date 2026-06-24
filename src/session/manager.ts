@@ -18,12 +18,25 @@ export interface SessionMeta {
   title: string;
 }
 
+export type CompactionReason = "manual" | "threshold" | "overflow";
+
+export interface CompactionData {
+  summary: string;
+  firstKeptEntryId: string;
+  tokensBefore: number;
+  reason: CompactionReason;
+  readFiles?: string[];
+  modifiedFiles?: string[];
+}
+
 export interface SessionEntry {
-  type: "meta" | "message" | "model_change";
+  type: "meta" | "message" | "model_change" | "compaction";
   id: string;
   timestamp: string;
-  data: ChatMessage | { provider: string; modelId: string } | SessionMeta;
+  data: ChatMessage | { provider: string; modelId: string } | SessionMeta | CompactionData;
 }
+
+export const COMPACTION_SUMMARY_PREFIX = "[Earlier conversation summary]\n\n";
 
 export interface SessionSummary {
   sessionId: string;
@@ -35,7 +48,7 @@ export interface SessionSummary {
 export class SessionManager {
   readonly sessionId: string;
   readonly sessionPath: string;
-  private messages: ChatMessage[] = [];
+  private entries: SessionEntry[] = [];
   private title?: string;
 
   constructor(sessionId?: string, cwd?: string) {
@@ -57,10 +70,9 @@ export class SessionManager {
     for (const line of lines) {
       try {
         const entry = JSON.parse(line) as SessionEntry;
+        this.entries.push(entry);
         if (entry.type === "meta") {
           this.title = (entry.data as SessionMeta).title;
-        } else if (entry.type === "message") {
-          this.messages.push(entry.data as ChatMessage);
         }
       } catch {
         // skip bad lines
@@ -68,8 +80,57 @@ export class SessionManager {
     }
   }
 
+  getEntries(): SessionEntry[] {
+    return [...this.entries];
+  }
+
   getMessages(): ChatMessage[] {
-    return [...this.messages];
+    return this.entries
+      .filter((e): e is SessionEntry & { type: "message" } => e.type === "message")
+      .map((e) => e.data as ChatMessage);
+  }
+
+  getLatestCompaction(): (SessionEntry & { type: "compaction" }) | undefined {
+    for (let i = this.entries.length - 1; i >= 0; i--) {
+      const entry = this.entries[i];
+      if (entry?.type === "compaction") {
+        return entry as SessionEntry & { type: "compaction" };
+      }
+    }
+    return undefined;
+  }
+
+  getPreviousCompactionSummary(): string | undefined {
+    const latest = this.getLatestCompaction();
+    if (!latest) return undefined;
+    return (latest.data as CompactionData).summary;
+  }
+
+  getContextMessages(): ChatMessage[] {
+    const compaction = this.getLatestCompaction();
+    if (!compaction) {
+      return this.getMessages();
+    }
+
+    const { summary, firstKeptEntryId } = compaction.data as CompactionData;
+    const keptIndex = this.entries.findIndex((e) => e.id === firstKeptEntryId);
+    if (keptIndex < 0) {
+      return this.getMessages();
+    }
+
+    const kept: ChatMessage[] = [];
+    for (let i = keptIndex; i < this.entries.length; i++) {
+      const entry = this.entries[i];
+      if (entry?.type === "message") {
+        kept.push(entry.data as ChatMessage);
+      }
+    }
+
+    const summaryMsg: ChatMessage = {
+      role: "user",
+      content: `${COMPACTION_SUMMARY_PREFIX}${summary}`,
+    };
+    return [summaryMsg, ...kept];
   }
 
   getTitle(): string | undefined {
@@ -78,7 +139,7 @@ export class SessionManager {
 
   getDisplayTitle(): string {
     if (this.title) return this.title;
-    const firstUser = this.messages.find((m) => m.role === "user");
+    const firstUser = this.getMessages().find((m) => m.role === "user");
     return firstUser ? fallbackTitle(firstUser.content) : "New chat";
   }
 
@@ -95,7 +156,6 @@ export class SessionManager {
   }
 
   appendMessage(msg: ChatMessage): void {
-    this.messages.push(msg);
     this.appendEntry({
       type: "message",
       id: randomUUID(),
@@ -110,6 +170,17 @@ export class SessionManager {
     }
   }
 
+  appendCompaction(data: CompactionData): string {
+    const id = randomUUID();
+    this.appendEntry({
+      type: "compaction",
+      id,
+      timestamp: new Date().toISOString(),
+      data,
+    });
+    return id;
+  }
+
   appendModelChange(model: Model): void {
     this.appendEntry({
       type: "model_change",
@@ -120,11 +191,12 @@ export class SessionManager {
   }
 
   private appendEntry(entry: SessionEntry): void {
+    this.entries.push(entry);
     appendFileSync(this.sessionPath, JSON.stringify(entry) + "\n", "utf-8");
   }
 
   clear(): void {
-    this.messages = [];
+    this.entries = [];
     this.title = undefined;
     writeFileSync(this.sessionPath, "", "utf-8");
   }

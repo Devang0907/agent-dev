@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { Box, useApp } from "ink";
-import type { AgentSession, SessionEvent } from "../agent/session.js";
+import type { AgentSession, SessionEvent, ContextUsageState } from "../agent/session.js";
 import { ChatView } from "./ChatView.js";
 import { Editor } from "./Editor.js";
 import { Footer } from "./Footer.js";
@@ -120,6 +120,7 @@ export function App({ session, workdir, onQuit }: AppProps) {
   const streamingRef = useRef("");
   const startupChecked = useRef(false);
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
+  const [contextUsage, setContextUsage] = useState<ContextUsageState>(() => session.getContextUsage());
 
   const theme = getTheme();
 
@@ -355,6 +356,27 @@ export function App({ session, workdir, onQuit }: AppProps) {
           break;
         case "model_changed":
           setModel(event.model);
+          setContextUsage(session.getContextUsage());
+          break;
+        case "compacting":
+          setDisplayMessages((prev) => [
+            ...prev,
+            toDisplayMessage("tool", "Compacting context…", "compaction"),
+          ]);
+          break;
+        case "compaction_done":
+          setContextUsage(session.getContextUsage());
+          setDisplayMessages((prev) => [
+            ...prev,
+            toDisplayMessage(
+              "tool",
+              `Context compacted (${event.tokensBefore.toLocaleString()} → ${event.tokensAfter.toLocaleString()} tokens, ${event.reason})`,
+              "compaction",
+            ),
+          ]);
+          break;
+        case "context_usage":
+          setContextUsage(session.getContextUsage());
           break;
         case "agent_mode_changed":
           setAgentMode(event.mode);
@@ -502,6 +524,23 @@ export function App({ session, workdir, onQuit }: AppProps) {
             summary || "No active plan. Ask the agent to create one, or it will use the plan tool automatically.",
           ),
         ]);
+        return;
+      }
+      if (value === "/compact" || value.startsWith("/compact ")) {
+        const instructions = value.startsWith("/compact ")
+          ? value.slice("/compact ".length).trim()
+          : undefined;
+        setDisplayMessages((prev) => [...prev, toDisplayMessage("user", value)]);
+        const result = await session.compact({
+          reason: "manual",
+          customInstructions: instructions || undefined,
+        });
+        if (!result.ok) {
+          setDisplayMessages((prev) => [
+            ...prev,
+            toDisplayMessage("assistant", result.message),
+          ]);
+        }
         return;
       }
       if (value === "/skills") {
@@ -688,6 +727,7 @@ export function App({ session, workdir, onQuit }: AppProps) {
         scrollHint={scrollHint}
         orchestratorMode={orchestratorMode}
         updateInfo={updateInfo}
+        contextUsage={contextUsage}
       />
 
       {overlay === "none" && (

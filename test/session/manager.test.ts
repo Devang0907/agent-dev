@@ -35,4 +35,14 @@ describe("SessionManager", () => {
     expect(list.some((s) => s.sessionId === mgr.sessionId)).toBe(true);
     ws.cleanup();
   });
+
+  it("tracks entries with stable ids", () => {
+    const ws = createTmpWorkspace();
+    const mgr = new SessionManager(undefined, ws.path);
+    mgr.appendMessage({ role: "user", content: "a" });
+    const entries = mgr.getEntries();
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.id).toBeTruthy();
+    ws.cleanup();
+  });
 });
