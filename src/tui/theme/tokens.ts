@@ -12,6 +12,7 @@ export interface ThemeColors {
   background: string;
   backgroundPanel: string;
   backgroundElement: string;
+  dialogScrim: string;
 }
 
 /** Agent-Dev palette — cyan primary, extended with OpenCode-style tiers */
@@ -29,6 +30,7 @@ export const theme: ThemeColors = {
   background: "black",
   backgroundPanel: "#1a1a1a",
   backgroundElement: "#2a2a2a",
+  dialogScrim: "#4a4a4a",
 };
 
 export const LOGO_COLOR = "#f36b33";

@@ -1,5 +1,5 @@
 import { Show } from "solid-js";
-import type { CliRenderer } from "@opentui/core";
+import type { CliRenderer, InputRenderable } from "@opentui/core";
 import { DialogOverlay } from "../ui/dialog.js";
 import { DialogSelect, type DialogSelectItem } from "../ui/dialog-select.js";
 import type { SessionBridge } from "../session-bridge.js";
@@ -11,7 +11,7 @@ import type { ProviderId } from "../../providers/types.js";
 import { getCompactionSettings, DEFAULT_COMPACTION_SETTINGS } from "../../config/settings.js";
 import type { ThinkingLevel } from "../../providers/types.js";
 import { discoverSkills } from "../../agent/skills.js";
-import { createSignal, onMount } from "solid-js";
+import { createEffect, createSignal, onMount } from "solid-js";
 import { useTheme } from "../theme/provider.js";
 import { PROVIDER_ENV_VARS } from "../../providers/registry.js";
 import { attachKeyHandler } from "../utils/keys.js";
@@ -192,60 +192,71 @@ export function Dialogs(props: DialogsProps) {
 
 function ApiKeyDialog(props: { bridge: SessionBridge; renderer: CliRenderer }) {
   const theme = useTheme();
+  let inputRef: InputRenderable | undefined;
   const [value, setValue] = createSignal("");
   const model = () => props.bridge.state().pendingModel!;
 
-  onMount(() =>
-    attachKeyHandler(props.renderer, (key) => {
+  const close = () =>
+    props.bridge.patch({
+      pendingModel: null,
+      dialog: props.bridge.state().apiKeyReturnDialog,
+      apiKeyReturnDialog: "none",
+    });
+
+  const readInput = () => inputRef?.plainText ?? value();
+
+  const saveKey = (raw?: string) => {
+    const key = (raw ?? readInput()).trim();
+    if (key) props.bridge.saveApiKey(key);
+  };
+
+  createEffect(() => {
+    const renderer = props.renderer;
+    return attachKeyHandler(renderer, (key) => {
       if (key.name === "escape") {
-        props.bridge.patch({
-          pendingModel: null,
-          dialog: props.bridge.state().apiKeyReturnDialog,
-          apiKeyReturnDialog: "none",
-        });
+        close();
         key.preventDefault();
         return;
       }
-      if (key.name === "return" && value().trim()) {
-        props.bridge.saveApiKey(value().trim());
-        key.preventDefault();
-        return;
+      if ((key.name === "return" || key.name === "kpenter") && !key.shift) {
+        const current = readInput().trim();
+        if (current) {
+          saveKey(current);
+          key.preventDefault();
+        }
       }
-      if (key.name === "backspace") {
-        setValue((v) => v.slice(0, -1));
-        key.preventDefault();
-      }
-      if (key.sequence?.length === 1 && !key.ctrl && !key.meta) {
-        setValue((v) => v + key.sequence);
-        key.preventDefault();
-      }
-    }),
-  );
+    });
+  });
+
+  onMount(() => () => {
+    if (inputRef && !inputRef.isDestroyed) inputRef.blur();
+  });
 
   const envVars = () => PROVIDER_ENV_VARS[model().provider];
 
   return (
-    <DialogOverlay
-      open
-      onClose={() =>
-        props.bridge.patch({
-          pendingModel: null,
-          dialog: props.bridge.state().apiKeyReturnDialog,
-          apiKeyReturnDialog: "none",
-        })
-      }
-    >
-      <box flexDirection="column">
+    <DialogOverlay open onClose={close}>
+      <box flexDirection="column" width={72}>
         <text fg={theme.text} attributes={1}>
           API key for {PROVIDER_LABELS[model().provider]}
         </text>
         <text fg={theme.textMuted}>model: {modelRef(model())}</text>
         <text fg={theme.textMuted}>env: {envVars().join(" or ")}</text>
-        <box marginTop={1} borderStyle="rounded" borderColor={theme.primary} paddingX={1}>
-          <text fg={theme.text}>{value() ? "•".repeat(Math.min(value().length, 40)) : "paste key…"}</text>
+        <box marginTop={1} borderStyle="rounded" borderColor={theme.primary} paddingX={1} paddingY={0}>
+          <input
+            ref={(el) => {
+              inputRef = el;
+            }}
+            focused
+            placeholder="paste key…"
+            value={value()}
+            onInput={setValue}
+            onChange={setValue}
+            onSubmit={() => saveKey()}
+          />
         </box>
         <text fg={theme.textMuted} marginTop={1}>
-          Enter save · Esc cancel
+          Type or paste key · Enter save · Esc cancel
         </text>
       </box>
     </DialogOverlay>
@@ -259,7 +270,7 @@ function ConnectDialog(props: { bridge: SessionBridge; renderer: CliRenderer }) 
     (props.bridge.state().settings.telegram?.allowedUserIds ?? []).join(", "),
   );
 
-  onMount(() =>
+  createEffect(() =>
     attachKeyHandler(props.renderer, (key) => {
       if (key.name === "escape") {
         props.bridge.patch({ dialog: "none" });

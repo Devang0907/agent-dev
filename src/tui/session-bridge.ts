@@ -21,6 +21,9 @@ import { getLatestTracePath } from "../agent/orchestrator/trace.js";
 import { formatProjectRulesSummary } from "../agent/project-rules.js";
 import { formatPermissionRulesSummary } from "../agent/permissions.js";
 import { checkForUpdate } from "../version/check.js";
+import { capDisplayMessages } from "./utils/scroll.js";
+
+const STREAM_FLUSH_MS = 32;
 
 export type DialogType =
   | "none"
@@ -78,6 +81,35 @@ function modelForProvider(provider: ProviderId, settings: Settings): Model {
 
 export function createSessionBridge(session: AgentSession, workdir: string) {
   const streamingRef = { current: "" };
+  let streamFlushTimer: ReturnType<typeof setTimeout> | null = null;
+  let scrollToLatestFn: (() => void) | null = null;
+
+  const flushStreamingText = () => {
+    if (streamFlushTimer) {
+      clearTimeout(streamFlushTimer);
+      streamFlushTimer = null;
+    }
+    patch({ streamingText: streamingRef.current });
+  };
+
+  const scheduleStreamingFlush = () => {
+    if (streamFlushTimer) return;
+    streamFlushTimer = setTimeout(() => {
+      streamFlushTimer = null;
+      patch({ streamingText: streamingRef.current });
+    }, STREAM_FLUSH_MS);
+  };
+
+  const appendDisplay = (existing: DisplayMessage[], ...items: DisplayMessage[]) =>
+    capDisplayMessages([...existing, ...items]);
+
+  const setScrollToLatest = (fn: (() => void) | null) => {
+    scrollToLatestFn = fn;
+  };
+
+  const scrollToLatest = () => {
+    scrollToLatestFn?.();
+  };
 
   const [state, setState] = createSignal<SessionBridgeState>({
     displayMessages: chatMessagesToDisplay(session.getMessages()),
@@ -109,8 +141,22 @@ export function createSessionBridge(session: AgentSession, workdir: string) {
         : "home",
   });
 
+  let focusPromptRef: (() => void) | null = null;
+
+  const registerPromptFocus = (fn: (() => void) | null) => {
+    focusPromptRef = fn;
+  };
+
   const patch = (partial: Partial<SessionBridgeState>) => {
+    const prevDialog = state().dialog;
     setState((s) => ({ ...s, ...partial }));
+    const nextDialog = partial.dialog ?? state().dialog;
+    if (prevDialog !== "none" && nextDialog === "none") {
+      const refocus = () => focusPromptRef?.();
+      queueMicrotask(refocus);
+      setTimeout(refocus, 50);
+      setTimeout(refocus, 150);
+    }
   };
 
   const refreshPlan = () => patch({ planTasks: loadPlanTasks(session.getSessionId()) });
@@ -136,11 +182,12 @@ export function createSessionBridge(session: AgentSession, workdir: string) {
     };
     session.updateSettings(updated);
     session.setModel(s.pendingModel);
+    const nextDialog = s.apiKeyReturnDialog === "settings" ? "settings" : "none";
     patch({
       settings: updated,
       model: s.pendingModel,
       pendingModel: null,
-      dialog: s.apiKeyReturnDialog,
+      dialog: nextDialog,
       apiKeyReturnDialog: "none",
       modelFilter: undefined,
     });
@@ -168,27 +215,31 @@ export function createSessionBridge(session: AgentSession, workdir: string) {
     const s = state();
     switch (event.type) {
       case "user_message":
+        flushStreamingText();
         patch({
-          displayMessages: [...s.displayMessages, toDisplayMessage("user", event.content)],
+          displayMessages: appendDisplay(s.displayMessages, toDisplayMessage("user", event.content)),
           running: true,
           streamingText: "",
           route: "session",
         });
         streamingRef.current = "";
+        scrollToLatest();
         break;
       case "message_start":
+        flushStreamingText();
         streamingRef.current = "";
         patch({ streamingText: "" });
         break;
       case "text_delta":
         streamingRef.current += event.delta;
-        patch({ streamingText: streamingRef.current });
+        scheduleStreamingFlush();
         break;
       case "tool_call": {
+        flushStreamingText();
         const partial = streamingRef.current;
         if (partial) {
           patch({
-            displayMessages: [...s.displayMessages, toDisplayMessage("assistant", partial)],
+            displayMessages: appendDisplay(s.displayMessages, toDisplayMessage("assistant", partial)),
             streamingText: "",
           });
           streamingRef.current = "";
@@ -202,10 +253,10 @@ export function createSessionBridge(session: AgentSession, workdir: string) {
       case "tool_result":
         patch({
           toolProgress: "",
-          displayMessages: [
-            ...s.displayMessages,
+          displayMessages: appendDisplay(
+            s.displayMessages,
             toDisplayMessage("tool", formatToolForDisplay(event.name, event.result), event.name),
-          ],
+          ),
         });
         if (event.name === "plan") refreshPlan();
         break;
@@ -267,19 +318,21 @@ export function createSessionBridge(session: AgentSession, workdir: string) {
         break;
       }
       case "turn_end": {
+        flushStreamingText();
         const final = streamingRef.current;
         if (final) {
           const msgs = s.displayMessages;
           const last = msgs[msgs.length - 1];
           if (!(last?.role === "assistant" && last.content.trim() === final.trim())) {
             patch({
-              displayMessages: [...msgs, toDisplayMessage("assistant", final)],
+              displayMessages: appendDisplay(msgs, toDisplayMessage("assistant", final)),
             });
           }
         }
         streamingRef.current = "";
         patch({ streamingText: "", toolProgress: "", running: false });
         refreshPlan();
+        scrollToLatest();
         break;
       }
       case "error": {
@@ -346,7 +399,10 @@ export function createSessionBridge(session: AgentSession, workdir: string) {
   };
 
   session.on("event", handler);
-  onCleanup(() => session.off("event", handler));
+  onCleanup(() => {
+    session.off("event", handler);
+    if (streamFlushTimer) clearTimeout(streamFlushTimer);
+  });
 
   const handleSlash = async (value: string, onQuit: () => void): Promise<boolean> => {
     const s = state();
@@ -534,6 +590,9 @@ export function createSessionBridge(session: AgentSession, workdir: string) {
     modelForProvider,
     refreshSkills,
     refreshPlan,
+    setScrollToLatest,
+    scrollToLatest,
+    registerPromptFocus,
   };
 }
 

@@ -6,6 +6,7 @@ import { LeftBorder } from "../../ui/left-border.js";
 interface UserMessageProps {
   content: string;
   width: number;
+  messageId?: number;
 }
 
 export function UserMessage(props: UserMessageProps) {
@@ -13,7 +14,13 @@ export function UserMessage(props: UserMessageProps) {
   const lines = () => wrapText(props.content, Math.max(10, props.width - 4));
 
   return (
-    <box marginTop={1} marginBottom={1}>
+    <box
+      id={props.messageId !== undefined ? `msg-${props.messageId}` : undefined}
+      marginTop={1}
+      marginBottom={1}
+      flexShrink={0}
+      width={props.width}
+    >
       <LeftBorder borderColor={theme.primary}>
         <For each={lines()}>
           {(line) => (

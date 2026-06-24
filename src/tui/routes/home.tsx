@@ -21,7 +21,7 @@ export function HomeRoute(props: HomeRouteProps) {
   const maxW = () => promptMaxWidth(props.renderer.width);
 
   return (
-    <box flexDirection="column" width="100%" height="100%" backgroundColor={theme.background}>
+    <box flexDirection="column" width="100%" height="100%" minHeight={0} backgroundColor={theme.background}>
       <box flexGrow={1} justifyContent="center" alignItems="center" flexDirection="column">
         <Logo
           tagline={
@@ -31,16 +31,19 @@ export function HomeRoute(props: HomeRouteProps) {
           }
         />
         <box marginTop={2} width={maxW()}>
-          <Prompt
-            model={s().model}
-            agentMode={s().agentMode}
-            orchestratorMode={s().orchestratorMode}
-            skills={s().skillOptions}
-            maxWidth={maxW()}
-            renderer={props.renderer}
-            onSubmit={props.onSubmit}
-            onModeCycle={(dir: 1 | -1) => props.bridge.session.cycleAgentMode(dir)}
-          />
+          <Show when={s().dialog === "none"}>
+            <Prompt
+              model={s().model}
+              agentMode={s().agentMode}
+              orchestratorMode={s().orchestratorMode}
+              skills={s().skillOptions}
+              maxWidth={maxW()}
+              renderer={props.renderer}
+              onSubmit={props.onSubmit}
+              onModeCycle={(dir: 1 | -1) => props.bridge.session.cycleAgentMode(dir)}
+              registerFocus={(fn) => props.bridge.registerPromptFocus(fn)}
+            />
+          </Show>
         </box>
       </box>
       <box

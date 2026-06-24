@@ -5,6 +5,7 @@ import {
   chatViewportHeight,
   effectiveScrollTop,
   isFollowing,
+  listWindowStart,
 } from "../../src/tui/utils/scroll.js";
 
 describe("formatToolForDisplay", () => {
@@ -35,5 +36,12 @@ describe("scroll helpers", () => {
   it("follows when offset null at bottom", () => {
     expect(isFollowing(null, 10)).toBe(true);
     expect(effectiveScrollTop(null, 10)).toBe(10);
+  });
+
+  it("computes list window start for dialog scrolling", () => {
+    expect(listWindowStart(0, 20, 12)).toBe(0);
+    expect(listWindowStart(11, 20, 12)).toBe(0);
+    expect(listWindowStart(12, 20, 12)).toBe(1);
+    expect(listWindowStart(19, 20, 12)).toBe(8);
   });
 });

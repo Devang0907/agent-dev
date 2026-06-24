@@ -2,6 +2,7 @@ import { For, Show, createEffect, createSignal, onMount } from "solid-js";
 import type { CliRenderer } from "@opentui/core";
 import { useTheme } from "../theme/provider.js";
 import { truncate } from "../utils/text.js";
+import { listWindowStart } from "../utils/scroll.js";
 import { attachKeyHandler } from "../utils/keys.js";
 
 export interface DialogSelectItem {
@@ -86,6 +87,8 @@ export function DialogSelect(props: DialogSelectProps) {
 
   const safeIndex = () => Math.min(index(), Math.max(0, filtered().length - 1));
   const listHeight = 12;
+  const windowStart = () => listWindowStart(safeIndex(), filtered().length, listHeight);
+  const visibleItems = () => filtered().slice(windowStart(), windowStart() + listHeight);
 
   return (
     <box flexDirection="column" width="100%">
@@ -116,12 +119,16 @@ export function DialogSelect(props: DialogSelectProps) {
         height={listHeight}
         overflow="hidden"
       >
-        <For each={filtered().slice(0, listHeight)}>
-          {(item, i) => (
-            <text fg={i() === safeIndex() ? theme.primary : theme.text}>
-              {`${i() === safeIndex() ? "› " : "  "}${item.marker ?? "●"} ${truncate(item.title, 72)}${item.subtitle ? ` ${truncate(item.subtitle, 40)}` : ""}`}
-            </text>
-          )}
+        <For each={visibleItems()}>
+          {(item, localIdx) => {
+            const rowIndex = () => windowStart() + localIdx();
+            const selected = () => rowIndex() === safeIndex();
+            return (
+              <text fg={selected() ? theme.primary : theme.text}>
+                {`${selected() ? "› " : "  "}${item.marker ?? "●"} ${truncate(item.title, 72)}${item.subtitle ? ` ${truncate(item.subtitle, 40)}` : ""}`}
+              </text>
+            );
+          }}
         </For>
         <Show when={filtered().length === 0}>
           <text fg={theme.textMuted}>No matches.</text>

@@ -1,9 +1,10 @@
-import { For, Show, createSignal, onMount } from "solid-js";
+import { For, Show, createEffect, createSignal } from "solid-js";
 import type { CliRenderer } from "@opentui/core";
 import { useTheme } from "../theme/provider.js";
 import type { CommandEntry } from "../commands/registry.js";
 import { fuzzyFilter } from "../commands/registry.js";
 import { truncate } from "../utils/text.js";
+import { listWindowStart } from "../utils/scroll.js";
 import { attachKeyHandler } from "../utils/keys.js";
 
 interface CommandPaletteProps {
@@ -21,13 +22,16 @@ export function CommandPalette(props: CommandPaletteProps) {
 
   const filtered = () => fuzzyFilter(props.commands, filter());
   const safeIndex = () => Math.min(index(), Math.max(0, filtered().length - 1));
+  const listHeight = 12;
+  const windowStart = () => listWindowStart(safeIndex(), filtered().length, listHeight);
+  const visibleItems = () => filtered().slice(windowStart(), windowStart() + listHeight);
 
-  onMount(() => {
+  createEffect(() => {
+    if (!props.open) return;
     const renderer = props.renderer;
     if (!renderer) return;
 
     return attachKeyHandler(renderer, (key) => {
-      if (!props.open) return;
       if (key.name === "escape") {
         props.onClose();
         key.preventDefault();
@@ -53,6 +57,7 @@ export function CommandPalette(props: CommandPaletteProps) {
         setFilter((f) => f + key.sequence);
         setIndex(0);
         key.preventDefault();
+        return;
       }
       if (key.name === "backspace") {
         setFilter((f) => f.slice(0, -1));
@@ -70,7 +75,7 @@ export function CommandPalette(props: CommandPaletteProps) {
         left={0}
         width="100%"
         height="100%"
-        backgroundColor="rgba(0,0,0,0.65)"
+        backgroundColor={theme.dialogScrim}
         zIndex={4000}
         justifyContent="center"
         alignItems="center"
@@ -96,12 +101,16 @@ export function CommandPalette(props: CommandPaletteProps) {
             <text fg={theme.text}>{filter() || "…"}</text>
           </box>
           <box flexDirection="column" marginTop={1} flexGrow={1}>
-            <For each={filtered().slice(0, 12)}>
-              {(entry, i) => (
-                <text fg={i() === safeIndex() ? theme.primary : theme.text}>
-                  {`${i() === safeIndex() ? "› " : "  "}● ${entry.slash ?? entry.id} — ${truncate(entry.title, 50)}`}
-                </text>
-              )}
+            <For each={visibleItems()}>
+              {(entry, localIdx) => {
+                const rowIndex = () => windowStart() + localIdx();
+                const selected = () => rowIndex() === safeIndex();
+                return (
+                  <text fg={selected() ? theme.primary : theme.text}>
+                    {`${selected() ? "› " : "  "}● ${entry.slash ?? entry.id} — ${truncate(entry.title, 50)}`}
+                  </text>
+                );
+              }}
             </For>
           </box>
         </box>

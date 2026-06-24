@@ -16,7 +16,7 @@ export function DialogOverlay(props: DialogOverlayProps) {
         left={0}
         width="100%"
         height="100%"
-        backgroundColor="rgba(0,0,0,0.6)"
+        backgroundColor={theme.dialogScrim}
         zIndex={3000}
         justifyContent="center"
         alignItems="center"

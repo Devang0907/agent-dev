@@ -32,6 +32,9 @@ function TuiRoot(props: {
     buildCommandRegistry({
       onSlash: (cmd) => void props.bridge.submitPrompt(cmd, props.onQuit),
       onPaletteAction: (id) => {
+        if (id === "scroll-latest") {
+          props.bridge.scrollToLatest();
+        }
         if (id === "interrupt" && props.bridge.state().running) {
           props.bridge.session.abort();
         }
@@ -55,7 +58,7 @@ function TuiRoot(props: {
 
   return (
     <ThemeProvider>
-      <box width="100%" height="100%">
+      <box width="100%" height="100%" minHeight={0}>
         <Show when={route() === "home"}>
           <HomeRoute bridge={props.bridge} renderer={props.renderer} onSubmit={submit} onQuit={props.onQuit} />
         </Show>
@@ -84,6 +87,7 @@ export async function runTui(props: TuiAppProps): Promise<void> {
     renderer = await createCliRenderer({
       useMouse: true,
       targetFps: 60,
+      gatherStats: false,
       exitOnCtrlC: true,
     });
   } catch (err) {

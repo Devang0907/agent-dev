@@ -1,8 +1,8 @@
-import { For, Show } from "solid-js";
+import { Show } from "solid-js";
 import type { Model } from "../../../providers/types.js";
 import { modelRef } from "../../../config/models.js";
 import { useTheme } from "../../theme/provider.js";
-import { wrapText } from "../../utils/text.js";
+import { getMarkdownSyntaxStyle } from "../../utils/syntax-style.js";
 
 interface AssistantMessageProps {
   content: string;
@@ -10,22 +10,29 @@ interface AssistantMessageProps {
   model?: Model;
   showMeta?: boolean;
   streaming?: boolean;
+  messageId?: number;
 }
 
 export function AssistantMessage(props: AssistantMessageProps) {
   const theme = useTheme();
-  const lines = () => wrapText(props.content, Math.max(10, props.width - 6));
+  const syntaxStyle = getMarkdownSyntaxStyle();
 
   return (
-    <box marginTop={1} marginBottom={1} paddingLeft={3}>
-      <For each={lines()}>
-        {(line) => (
-          <text fg={theme.text}>{line || " "}</text>
-        )}
-      </For>
-      <Show when={props.streaming}>
-        <text fg={theme.textMuted}> …</text>
-      </Show>
+    <box
+      id={props.messageId !== undefined ? `msg-${props.messageId}` : undefined}
+      marginTop={1}
+      marginBottom={1}
+      paddingLeft={3}
+      flexShrink={0}
+      width={props.width}
+    >
+      <markdown
+        content={props.content || " "}
+        syntaxStyle={syntaxStyle}
+        fg={theme.text}
+        streaming={props.streaming ?? false}
+        conceal
+      />
       <Show when={props.showMeta && props.model}>
         <text fg={theme.textMuted}> ▣ {modelRef(props.model!)}</text>
       </Show>

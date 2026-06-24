@@ -1,5 +1,5 @@
-import { For, Show, createMemo } from "solid-js";
-import type { CliRenderer } from "@opentui/core";
+import { For, Show, createMemo, onCleanup, onMount } from "solid-js";
+import type { CliRenderer, ScrollBoxRenderable } from "@opentui/core";
 import { useTheme } from "../../theme/provider.js";
 import { UserMessage } from "../../components/messages/user-message.js";
 import { AssistantMessage } from "../../components/messages/assistant-message.js";
@@ -11,6 +11,9 @@ import { Sidebar } from "./sidebar.js";
 import type { SessionBridge } from "../../session-bridge.js";
 import type { DisplayMessage } from "../../display.js";
 import { contentWidth, promptMaxWidth, WIDE_BREAKPOINT } from "../../utils/text.js";
+import { scrollToBottom } from "../../utils/scroll.js";
+import { defaultScrollAcceleration } from "../../utils/scroll-acceleration.js";
+import { attachKeyHandler } from "../../utils/keys.js";
 
 interface SessionRouteProps {
   bridge: SessionBridge;
@@ -20,9 +23,12 @@ interface SessionRouteProps {
 
 export function SessionRoute(props: SessionRouteProps) {
   const theme = useTheme();
+  let scrollRef: ScrollBoxRenderable | undefined;
+
   const s = () => props.bridge.state();
   const wide = () => props.renderer.width > WIDE_BREAKPOINT;
   const width = () => contentWidth(props.renderer.width, wide());
+  const showScrollbar = () => props.renderer.width >= 80;
 
   const lastAssistantId = createMemo(() => {
     const msgs = s().displayMessages;
@@ -32,33 +38,94 @@ export function SessionRoute(props: SessionRouteProps) {
     return -1;
   });
 
+  const goToBottom = () => {
+    if (scrollRef) scrollToBottom(scrollRef);
+  };
+
+  onMount(() => {
+    props.bridge.setScrollToLatest(goToBottom);
+
+    const detach = attachKeyHandler(props.renderer, (key) => {
+      const scroll = scrollRef;
+      if (!scroll || scroll.isDestroyed) return;
+      if (s().dialog !== "none") return;
+
+      if (key.name === "pageup") {
+        scroll.scrollBy(-Math.max(1, Math.floor(scroll.viewport.height / 2)));
+        key.preventDefault();
+        return;
+      }
+      if (key.name === "pagedown") {
+        scroll.scrollBy(Math.max(1, Math.floor(scroll.viewport.height / 2)));
+        key.preventDefault();
+        return;
+      }
+      if (key.name === "home" && !key.ctrl) {
+        scroll.scrollTo(0);
+        key.preventDefault();
+        return;
+      }
+      if (key.name === "end" || (key.name === "g" && key.ctrl)) {
+        goToBottom();
+        key.preventDefault();
+      }
+    });
+
+    onCleanup(() => {
+      detach();
+      props.bridge.setScrollToLatest(null);
+    });
+  });
+
   const renderMessage = (msg: DisplayMessage) => {
+    const common = { width: width(), messageId: msg.id };
     if (msg.role === "user") {
-      return <UserMessage content={msg.content} width={width()} />;
+      return <UserMessage content={msg.content} {...common} />;
     }
     if (msg.role === "assistant") {
       return (
         <AssistantMessage
           content={msg.content}
-          width={width()}
+          {...common}
           model={s().model}
           showMeta={msg.id === lastAssistantId() && !s().running}
         />
       );
     }
-    return <ToolMessage content={msg.content} toolName={msg.toolName} width={width()} />;
+    return <ToolMessage content={msg.content} toolName={msg.toolName} {...common} />;
+  };
+
+  const handleSubmit = (value: string) => {
+    props.onSubmit(value);
+    goToBottom();
   };
 
   return (
-    <box flexDirection="row" width="100%" height="100%" backgroundColor={theme.background}>
-      <box flexDirection="column" flexGrow={1} height="100%">
+    <box flexDirection="row" width="100%" height="100%" minHeight={0} backgroundColor={theme.background}>
+      <box flexDirection="column" flexGrow={1} height="100%" minHeight={0}>
         <scrollbox
+          ref={(r) => {
+            scrollRef = r;
+          }}
           flexGrow={1}
+          minHeight={0}
           stickyScroll
           stickyStart="bottom"
+          viewportCulling
+          scrollAcceleration={defaultScrollAcceleration()}
+          viewportOptions={{ paddingRight: showScrollbar() ? 1 : 0 }}
+          verticalScrollbarOptions={{
+            paddingLeft: 1,
+            visible: showScrollbar(),
+            trackOptions: {
+              backgroundColor: theme.backgroundElement,
+              foregroundColor: theme.border,
+            },
+          }}
           paddingX={2}
           paddingY={1}
         >
+          <box height={1} flexShrink={0} />
           <For each={s().displayMessages}>{(msg) => renderMessage(msg)}</For>
           <Show when={s().streamingText}>
             <AssistantMessage
@@ -68,46 +135,46 @@ export function SessionRoute(props: SessionRouteProps) {
             />
           </Show>
           <Show when={s().toolProgress}>
-            <ToolMessage
-              content={s().toolProgress}
-              toolName="browser"
-              width={width()}
-            />
+            <ToolMessage content={s().toolProgress} toolName="browser" width={width()} />
           </Show>
         </scrollbox>
 
         <Show when={s().pendingCommand}>
           {(req) => (
-            <PermissionPrompt
-              request={req()}
-              renderer={props.renderer}
-              onApprove={() => {
-                props.bridge.session.respondToPermission(true);
-                props.bridge.patch({ pendingCommand: null });
-              }}
-              onDeny={() => {
-                props.bridge.session.respondToPermission(false);
-                props.bridge.patch({ pendingCommand: null });
-              }}
-            />
+            <box flexShrink={0}>
+              <PermissionPrompt
+                request={req()}
+                renderer={props.renderer}
+                onApprove={() => {
+                  props.bridge.session.respondToPermission(true);
+                  props.bridge.patch({ pendingCommand: null });
+                }}
+                onDeny={() => {
+                  props.bridge.session.respondToPermission(false);
+                  props.bridge.patch({ pendingCommand: null });
+                }}
+              />
+            </box>
           )}
         </Show>
 
         <Show when={s().pendingInteraction}>
           {(req) => (
-            <BrowserPrompt
-              request={req()}
-              renderer={props.renderer}
-              onContinue={(value) => {
-                props.bridge.session.respondToInteraction(value);
-                props.bridge.patch({ pendingInteraction: null });
-              }}
-            />
+            <box flexShrink={0}>
+              <BrowserPrompt
+                request={req()}
+                renderer={props.renderer}
+                onContinue={(value) => {
+                  props.bridge.session.respondToInteraction(value);
+                  props.bridge.patch({ pendingInteraction: null });
+                }}
+              />
+            </box>
           )}
         </Show>
 
         <Show when={!s().pendingCommand && !s().pendingInteraction && s().dialog === "none"}>
-          <box paddingX={2} paddingY={1} alignItems="center">
+          <box flexShrink={0} paddingX={2} paddingY={1} alignItems="center">
             <Prompt
               model={s().model}
               agentMode={s().agentMode}
@@ -117,8 +184,9 @@ export function SessionRoute(props: SessionRouteProps) {
               running={s().running}
               maxWidth={promptMaxWidth(props.renderer.width)}
               renderer={props.renderer}
-              onSubmit={props.onSubmit}
+              onSubmit={handleSubmit}
               onModeCycle={(dir) => props.bridge.session.cycleAgentMode(dir)}
+              registerFocus={(fn) => props.bridge.registerPromptFocus(fn)}
             />
           </box>
         </Show>

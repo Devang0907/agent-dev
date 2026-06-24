@@ -13,7 +13,7 @@ import {
   type InputSuggestion,
   type SkillNameOption,
 } from "../../commands/slash-commands.js";
-import { attachKeyHandler } from "../../utils/keys.js";
+import { attachKeyHandler, focusEditor, isPrintableKey } from "../../utils/keys.js";
 
 const PICKER_VISIBLE = 8;
 
@@ -37,6 +37,7 @@ interface PromptProps {
   onSubmit: (value: string) => void;
   onModeCycle?: (direction: 1 | -1) => void;
   onSuggestionsOpenChange?: (open: boolean) => void;
+  registerFocus?: (fn: (() => void) | null) => void;
 }
 
 export function Prompt(props: PromptProps) {
@@ -70,8 +71,35 @@ export function Prompt(props: PromptProps) {
     setSuggestions([]);
     textareaRef?.setText("");
   };
+  const focusTextarea = () => {
+    const el = textareaRef;
+    if (!el || el.isDestroyed || props.disabled) return;
+    focusEditor(props.renderer, el);
+  };
+
   createEffect(() => {
     props.onSuggestionsOpenChange?.(pickerOpen());
+  });
+
+  createEffect(() => {
+    if (props.disabled) {
+      const el = textareaRef;
+      if (el && !el.isDestroyed) el.blur();
+      return;
+    }
+    focusTextarea();
+    const id = setTimeout(focusTextarea, 50);
+    onCleanup(() => clearTimeout(id));
+  });
+
+  onMount(() => {
+    focusTextarea();
+    const id = setTimeout(focusTextarea, 100);
+    props.registerFocus?.(focusTextarea);
+    onCleanup(() => {
+      clearTimeout(id);
+      props.registerFocus?.(null);
+    });
   });
 
   onMount(() => {
@@ -112,7 +140,7 @@ export function Prompt(props: PromptProps) {
     clearInput();
   };
 
-  onMount(() => {
+  createEffect(() => {
     const renderer = props.renderer;
     if (!renderer) return;
 
@@ -150,6 +178,25 @@ export function Prompt(props: PromptProps) {
 
       if (key.name === "return" && !key.shift && list.length > 0) {
         handleSubmit();
+        key.preventDefault();
+        return;
+      }
+
+      if (key.defaultPrevented) return;
+
+      const el = textareaRef;
+      if (!el || el.isDestroyed) return;
+
+      if (key.name === "backspace") {
+        focusEditor(renderer, el);
+        el.deleteCharBackward();
+        key.preventDefault();
+        return;
+      }
+
+      if (isPrintableKey(key)) {
+        focusEditor(renderer, el);
+        el.insertText(key.sequence);
         key.preventDefault();
       }
     });
