@@ -4,7 +4,7 @@ import {
   isModelCommand,
   matchSlashCommands,
   matchSkillSuggestions,
-} from "../../src/ui/slash-commands.js";
+} from "../../src/tui/commands/slash-commands.js";
 
 describe("matchSlashCommands", () => {
   it("matches prefix", () => {

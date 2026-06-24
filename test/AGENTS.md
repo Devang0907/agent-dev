@@ -3,9 +3,9 @@
 ## Running tests
 
 ```bash
-npm test              # run once
-npm run test:watch    # watch mode
-npm run test:coverage # with coverage report
+bun run test              # run once
+bun run test:watch        # watch mode
+bun run test:coverage     # with coverage report
 ```
 
 ## Isolation

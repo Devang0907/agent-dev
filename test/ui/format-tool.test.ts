@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { formatToolForDisplay } from "../../src/ui/format-tool.js";
+import { formatToolForDisplay } from "../../src/tui/format-tool.js";
+import { wrapText } from "../../src/tui/utils/text.js";
 import {
   chatViewportHeight,
   effectiveScrollTop,
   isFollowing,
-  wrapText,
-} from "../../src/ui/scroll.js";
+} from "../../src/tui/utils/scroll.js";
 
 describe("formatToolForDisplay", () => {
   it("formats dev server bash output", () => {

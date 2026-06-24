@@ -240,3 +240,9 @@ export function loadPlanSummary(sessionId?: string): string {
   if (!plan || plan.tasks.length === 0) return "";
   return formatPlan(plan);
 }
+
+export function loadPlanTasks(sessionId?: string): PlanTask[] {
+  if (!sessionId) return [];
+  const plan = loadPlan(sessionId);
+  return plan?.tasks ?? [];
+}

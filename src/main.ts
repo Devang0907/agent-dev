@@ -1,5 +1,3 @@
-import { render } from "ink";
-import React from "react";
 import { loadSettings, setOrchestratorMode } from "./config/settings.js";
 import { SessionManager } from "./session/manager.js";
 import { AgentSession } from "./agent/session.js";
@@ -7,7 +5,7 @@ import { parseArgs, printHelp } from "./cli/args.js";
 import { runSkillsCommand } from "./cli/skills.js";
 import { runTelegramCommand } from "./cli/telegram.js";
 import { runPrintMode } from "./modes/print-mode.js";
-import { App } from "./ui/App.js";
+import { startApp } from "./tui/app.js";
 
 export async function main(): Promise<void> {
   if (process.argv[2] === "skills") {
@@ -42,29 +40,39 @@ export async function main(): Promise<void> {
   const initialModel = AgentSession.resolveInitialModel(settings, args.model);
   const session = new AgentSession(settings, sessionManager, workdir, initialModel);
 
-  const usePrint = args.print || !process.stdin.isTTY || !process.stdout.isTTY;
-
-  if (usePrint) {
-    const prompt = args.prompt ?? "";
+  if (args.print) {
+    let prompt = args.prompt?.trim() ?? "";
+    if (!prompt && process.stdin.isTTY === false) {
+      prompt = (await Bun.stdin.text()).trim();
+    }
     if (!prompt) {
-      console.error("Print mode requires a prompt argument.");
+      console.error(
+        "Print mode requires a prompt argument.\n" +
+          "  agent -p \"your prompt\"\n" +
+          "Or run without -p in an interactive terminal for the TUI.",
+      );
       process.exit(1);
     }
     await runPrintMode(session, prompt);
     return;
   }
 
-  const { waitUntilExit } = render(
-    React.createElement(App, {
-      session,
-      workdir,
-      onQuit: () => {},
-    }),
-  );
-
-  if (args.prompt) {
-    setTimeout(() => session.prompt(args.prompt!), 100);
+  if (process.stdin.isTTY === false) {
+    const piped = (await Bun.stdin.text()).trim();
+    if (piped) {
+      await runPrintMode(session, piped);
+      return;
+    }
   }
 
-  await waitUntilExit();
+  try {
+    await startApp({
+      session,
+      workdir,
+      initialPrompt: args.prompt,
+    });
+  } catch (err) {
+    console.error("Failed to start terminal UI:", err);
+    process.exit(1);
+  }
 }

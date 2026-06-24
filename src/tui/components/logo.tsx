@@ -1,0 +1,54 @@
+import { For } from "solid-js";
+import { LOGO_COLOR } from "../theme/tokens.js";
+
+export const LOGO_LINES = [
+  " █████╗  ██████╗ ███████╗███╗   ██╗████████╗",
+  "██╔══██╗██╔════╝ ██╔════╝████╗  ██║╚══██╔══╝",
+  "███████║██║  ███╗█████╗  ██╔██╗ ██║   ██║",
+  "██╔══██║██║   ██║██╔══╝  ██║╚██╗██║   ██║",
+  "██║  ██║╚██████╔╝███████╗██║ ╚████║   ██║",
+  "╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝  ╚═══╝   ╚═╝",
+  "",
+  "██████╗ ███████╗██╗   ██╗",
+  "██╔══██╗██╔════╝██║   ██║",
+  "██║  ██║█████╗  ██║   ██║",
+  "██║  ██║██╔══╝  ╚██╗ ██╔╝",
+  "██████╔╝███████╗ ╚████╔╝",
+  "╚═════╝ ╚══════╝  ╚═══╝",
+];
+
+interface LogoProps {
+  compact?: boolean;
+  tagline?: string;
+}
+
+export function Logo(props: LogoProps) {
+  if (props.compact) {
+    return (
+      <box flexDirection="row">
+        <text fg={LOGO_COLOR} attributes={1}>
+          ✦ AGENT-DEV
+        </text>
+        <text fg="gray"> · {props.tagline ?? "Autonomous coding agent for your terminal"}</text>
+      </box>
+    );
+  }
+
+  return (
+    <box flexDirection="column" alignItems="center">
+      <For each={LOGO_LINES}>
+        {(line) => (
+          <text fg={LOGO_COLOR} attributes={1}>
+            {line || " "}
+          </text>
+        )}
+      </For>
+      <box marginTop={1} flexDirection="row">
+        <text fg={LOGO_COLOR} attributes={1}>
+          ✦{" "}
+        </text>
+        <text fg="gray">{props.tagline ?? "Autonomous coding agent for your terminal"}</text>
+      </box>
+    </box>
+  );
+}

@@ -1,16 +1,18 @@
 # agent-dev
 
-A minimal terminal coding agent with an Ink TUI. Chat with an AI that can read and edit code, search the web, run git/shell commands (with approval), use MCP servers, load skills, schedule Telegram reminders and daily tasks, and optionally delegate work through a **boss orchestrator** that coordinates specialized worker agents.
+A minimal terminal coding agent with an OpenTUI terminal UI (OpenCode-style layout). Chat with an AI that can read and edit code, search the web, run git/shell commands (with approval), use MCP servers, load skills, schedule Telegram reminders and daily tasks, and optionally delegate work through a **boss orchestrator** that coordinates specialized worker agents.
 
 ## Quick start
+
+**Requires [Bun](https://bun.sh) 1.2+.**
 
 **From source:**
 
 ```bash
 git clone https://github.com/Devang0907/agent-dev.git
 cd agent-dev
-npm install
-npm run dev
+bun install
+bun run dev
 ```
 
 **Global install (npm):**
@@ -30,7 +32,7 @@ export GROQ_API_KEY=gsk_...           # Groq
 export GEMINI_API_KEY=...             # Google Gemini
 ```
 
-Requires **Node.js 20+**.
+Requires **Bun 1.2+** (Bun must be on your PATH for the `agent` command).
 
 ## Providers
 
@@ -64,16 +66,16 @@ Default provider/model: `free/meta-llama/llama-3.3-70b-instruct:free`.
 ## CLI
 
 ```bash
-npm run dev                                    # Interactive TUI
-npm run dev -- -p "List files in src"          # Print mode (no TUI)
-npm run dev -- --boss                          # Start in boss orchestrator mode
-npm run dev -- --boss -p "refactor auth module" # Boss mode, print and exit
-npm run dev -- -c                              # Continue last session
-npm run dev -- --model groq/llama-3.3-70b-versatile "hello"
-npm run build && npm start                     # Production build
-npm test                                       # Run test suite
-npm run test:watch                             # Watch mode
-npm run test:coverage                          # Coverage report
+bun run dev                                    # Interactive TUI
+bun run dev -- -p "List files in src"          # Print mode (no TUI)
+bun run dev -- --boss                          # Start in boss orchestrator mode
+bun run dev -- --boss -p "refactor auth module" # Boss mode, print and exit
+bun run dev -- -c                              # Continue last session
+bun run dev -- --model groq/llama-3.3-70b-versatile "hello"
+bun run build && bun start                     # Production build
+bun run test                                   # Run test suite
+bun run test:watch                             # Watch mode
+bun run test:coverage                          # Coverage report
 ```
 
 | Flag | Description |
@@ -575,7 +577,7 @@ src/
 │   ├── telegram/            # Telegram bot daemon (grammY)
 │   └── scheduler.ts         # Fires due reminders and daily tasks
 ├── providers/               # OpenAI, Groq, Gemini, OpenRouter
-├── ui/                      # Ink TUI
+├── tui/                     # OpenTUI + Solid terminal UI (OpenCode-style)
 └── modes/print-mode.ts      # Headless / CI output
 ```
 
