@@ -106,7 +106,7 @@ export function Sidebar(props: SidebarProps) {
         ) : null}
       </box>
 
-      <text fg={theme.textMuted}>agent-dev v0.4.3</text>
+      <text fg={theme.textMuted}>agent-dev v0.4.4</text>
     </box>
   );
 }

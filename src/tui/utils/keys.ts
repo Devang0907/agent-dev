@@ -15,7 +15,7 @@ function dispatch(key: KeyEvent): void {
   }
   if (overlayHandler) {
     overlayHandler(key);
-    return;
+    if (key.defaultPrevented) return;
   }
   if (auxiliaryHandler) {
     auxiliaryHandler(key);
