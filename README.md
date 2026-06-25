@@ -260,7 +260,7 @@ Telegram: `/compact` (same as TUI).
 
 ## Project rules
 
-Project rules are markdown instructions (Pi/Cursor-style) injected into the system prompt automatically.
+Project rules are markdown instructions injected into the system prompt automatically.
 
 **Discovery order** (root → specific; all matching files are concatenated):
 
@@ -332,7 +332,7 @@ Read-only git commands and `SELECT` queries stay allowed regardless of rules.
 
 ### Build and Plan
 
-Switch between **Build** and **Plan** mode like OpenCode:
+Switch between **Build** and **Plan** mode:
 
 | Mode | Toggle | Behavior |
 |------|--------|----------|
@@ -454,7 +454,7 @@ Use the `mcp` tool with `list_servers`, `list_tools`, and `call_tool` actions.
 
 ### Skills
 
-Skills use the [Vercel Agent Skills](https://vercel.com/docs/agent-resources/skills) ecosystem (same format as OpenCode and Cursor).
+Skills use the [Vercel Agent Skills](https://vercel.com/docs/agent-resources/skills) ecosystem (same format as Cursor).
 
 **Install skills:**
 
