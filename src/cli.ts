@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import "@opentui/solid/preload";
 import { main } from "./main.js";
 
 main().catch((err) => {

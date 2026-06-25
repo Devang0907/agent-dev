@@ -13,7 +13,7 @@ import {
   type InputSuggestion,
   type SkillNameOption,
 } from "../../commands/slash-commands.js";
-import { focusEditor, setPromptKeyHandler } from "../../utils/keys.js";
+import { focusEditor } from "../../utils/keys.js";
 import type { KeyEvent } from "@opentui/core";
 
 const PICKER_VISIBLE = 8;
@@ -186,62 +186,53 @@ export function Prompt(props: PromptProps) {
     clearInput();
   };
 
-  onMount(() => {
-    const handleKey = (key: KeyEvent) => {
-      if (props.locked) return;
-      if (props.disabled && !props.running) return;
-      if (key.name === "escape" && props.running) {
-        key.preventDefault();
-        return;
-      }
+  const handlePromptKey = (key: KeyEvent) => {
+    if (props.locked) return;
+    if (props.disabled && !props.running) return;
 
-      const list = suggestions();
-      const select = pickerSelectRef;
-      if (list.length > 0 && (key.name === "up" || key.name === "down")) {
-        if (select) {
-          if (key.name === "up") select.moveUp(1);
-          else select.moveDown(1);
-          setPickerIndex(select.getSelectedIndex());
-        } else {
-          setPickerIndex((i) =>
-            key.name === "up" ? Math.max(0, i - 1) : Math.min(list.length - 1, i + 1),
-          );
-        }
-        key.preventDefault();
-        return;
-      }
-
-      if (key.name === "tab") {
-        const v = inputText();
-        if (v.startsWith("/")) {
-          const completed = completeInput(v, props.skills);
-          if (completed) {
-            syncText(completed);
-          } else {
-            const pick = selectedSuggestion();
-            if (pick) applySuggestion(pick);
-          }
-        } else if (!pickerOpen() && props.onModeCycle) {
-          props.onModeCycle(key.shift ? -1 : 1);
-        }
-        key.preventDefault();
-        return;
-      }
-
-      if (key.name === "return" && !key.shift && list.length > 0) {
-        handleSubmit();
-        key.preventDefault();
-        return;
-      }
-
-      // Let the focused textarea handle printable keys and backspace natively.
-      // Avoid intercepting these keys in the global prompt router.
+    if (key.name === "escape" && props.running) {
+      key.preventDefault();
       return;
-    };
+    }
 
-    setPromptKeyHandler(handleKey);
-    onCleanup(() => setPromptKeyHandler(null));
-  });
+    const list = suggestions();
+    const select = pickerSelectRef;
+    if (list.length > 0 && (key.name === "up" || key.name === "down")) {
+      if (select) {
+        if (key.name === "up") select.moveUp(1);
+        else select.moveDown(1);
+        setPickerIndex(select.getSelectedIndex());
+      } else {
+        setPickerIndex((i) =>
+          key.name === "up" ? Math.max(0, i - 1) : Math.min(list.length - 1, i + 1),
+        );
+      }
+      key.preventDefault();
+      return;
+    }
+
+    if (key.name === "tab") {
+      const v = inputText();
+      if (v.startsWith("/")) {
+        const completed = completeInput(v, props.skills);
+        if (completed) {
+          syncText(completed);
+        } else {
+          const pick = selectedSuggestion();
+          if (pick) applySuggestion(pick);
+        }
+      } else if (!pickerOpen() && props.onModeCycle) {
+        props.onModeCycle(key.shift ? -1 : 1);
+      }
+      key.preventDefault();
+      return;
+    }
+
+    if (key.name === "return" && !key.shift && list.length > 0) {
+      handleSubmit();
+      key.preventDefault();
+    }
+  };
 
   return (
     <box flexDirection="column" width={props.maxWidth}>
@@ -258,6 +249,7 @@ export function Prompt(props: PromptProps) {
             ref={(el) => {
               pickerSelectRef = el;
             }}
+            focused={false}
             options={selectOptions()}
             height={pickerHeight()}
             showScrollIndicator={suggestions().length > pickerHeight()}
@@ -290,6 +282,7 @@ export function Prompt(props: PromptProps) {
           maxHeight={8}
           initialValue=""
           keyBindings={[...PROMPT_KEY_BINDINGS]}
+          onKeyDown={handlePromptKey}
           onContentChange={() => {
             const text = textareaRef?.plainText ?? "";
             setValue(text);
