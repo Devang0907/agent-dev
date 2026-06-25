@@ -21,7 +21,9 @@ function dispatch(key: KeyEvent): void {
     auxiliaryHandler(key);
     if (key.defaultPrevented) return;
   }
-  promptHandler?.(key);
+  if (promptHandler && !key.defaultPrevented) {
+    promptHandler(key);
+  }
 }
 
 export function installKeyRouter(renderer: CliRenderer): void {

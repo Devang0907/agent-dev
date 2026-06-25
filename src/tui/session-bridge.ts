@@ -143,9 +143,18 @@ export function createSessionBridge(session: AgentSession, workdir: string) {
   });
 
   let focusPromptRef: (() => void) | null = null;
+  let clearPromptRef: (() => void) | null = null;
 
   const registerPromptFocus = (fn: (() => void) | null) => {
     focusPromptRef = fn;
+  };
+
+  const registerPromptClear = (fn: (() => void) | null) => {
+    clearPromptRef = fn;
+  };
+
+  const clearPrompt = () => {
+    clearPromptRef?.();
   };
 
   const patch = (partial: Partial<SessionBridgeState>) => {
@@ -154,6 +163,7 @@ export function createSessionBridge(session: AgentSession, workdir: string) {
     const nextDialog = partial.dialog ?? state().dialog;
     if (prevDialog !== "none" && nextDialog === "none") {
       clearOverlayKeyHandler();
+      clearPrompt();
       const refocus = () => focusPromptRef?.();
       queueMicrotask(refocus);
       setTimeout(refocus, 50);
@@ -568,7 +578,10 @@ export function createSessionBridge(session: AgentSession, workdir: string) {
   const submitPrompt = async (value: string, onQuit: () => void) => {
     const trimmed = value.trim();
     if (!trimmed) return;
-    if (await handleSlash(trimmed, onQuit)) return;
+    if (await handleSlash(trimmed, onQuit)) {
+      clearPrompt();
+      return;
+    }
     const s = state();
     if (s.running) return;
     if (!hasProviderAuth(s.model.provider, s.settings)) {
@@ -593,6 +606,7 @@ export function createSessionBridge(session: AgentSession, workdir: string) {
     setScrollToLatest,
     scrollToLatest,
     registerPromptFocus,
+    registerPromptClear,
   };
 }
 

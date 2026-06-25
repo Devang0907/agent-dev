@@ -41,6 +41,7 @@ export function HomeRoute(props: HomeRouteProps) {
             onSubmit={props.onSubmit}
             onModeCycle={(dir: 1 | -1) => props.bridge.session.cycleAgentMode(dir)}
             registerFocus={(fn) => props.bridge.registerPromptFocus(fn)}
+            registerClear={(fn) => props.bridge.registerPromptClear(fn)}
           />
         </box>
       </box>

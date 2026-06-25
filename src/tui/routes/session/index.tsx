@@ -182,6 +182,7 @@ export function SessionRoute(props: SessionRouteProps) {
               onSubmit={handleSubmit}
               onModeCycle={(dir) => props.bridge.session.cycleAgentMode(dir)}
               registerFocus={(fn) => props.bridge.registerPromptFocus(fn)}
+              registerClear={(fn) => props.bridge.registerPromptClear(fn)}
             />
           </box>
         ) : null}

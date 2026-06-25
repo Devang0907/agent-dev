@@ -13,7 +13,7 @@ import {
   type InputSuggestion,
   type SkillNameOption,
 } from "../../commands/slash-commands.js";
-import { focusEditor, isPrintableKey, setPromptKeyHandler } from "../../utils/keys.js";
+import { focusEditor, setPromptKeyHandler } from "../../utils/keys.js";
 import type { KeyEvent } from "@opentui/core";
 
 const PICKER_VISIBLE = 8;
@@ -47,6 +47,7 @@ interface PromptProps {
   onModeCycle?: (direction: 1 | -1) => void;
   onSuggestionsOpenChange?: (open: boolean) => void;
   registerFocus?: (fn: (() => void) | null) => void;
+  registerClear?: (fn: (() => void) | null) => void;
 }
 
 export function Prompt(props: PromptProps) {
@@ -136,9 +137,11 @@ export function Prompt(props: PromptProps) {
     focusTextarea();
     const id = setTimeout(focusTextarea, 100);
     props.registerFocus?.(focusTextarea);
+    props.registerClear?.(clearInput);
     onCleanup(() => {
       clearTimeout(id);
       props.registerFocus?.(null);
+      props.registerClear?.(null);
     });
   });
 
@@ -157,25 +160,29 @@ export function Prompt(props: PromptProps) {
   const handleSubmit = () => {
     if (props.disabled && !props.running) return;
 
-    const pick = selectedSuggestion();
-    if (pick) {
-      if (isSkillPicker() && pick.cmd.startsWith("/skill ")) {
-        applySuggestion(pick);
-        return;
-      }
-      if (pick.cmd === "/skill") {
-        syncText("/skill ");
-        return;
-      }
-      if (!isSkillPicker()) {
-        props.onSubmit(pick.cmd);
-        clearInput();
-        return;
+    const trimmed = inputText().trim();
+    if (!trimmed) return;
+
+    if (pickerOpen()) {
+      const pick = selectedSuggestion();
+      if (pick) {
+        if (isSkillPicker() && pick.cmd.startsWith("/skill ")) {
+          applySuggestion(pick);
+          return;
+        }
+        if (pick.cmd === "/skill") {
+          syncText("/skill ");
+          return;
+        }
+        if (!isSkillPicker()) {
+          props.onSubmit(pick.cmd);
+          clearInput();
+          return;
+        }
       }
     }
 
-    const trimmed = inputText().trim();
-    if (trimmed) props.onSubmit(trimmed);
+    props.onSubmit(trimmed);
     clearInput();
   };
 
@@ -227,22 +234,9 @@ export function Prompt(props: PromptProps) {
         return;
       }
 
-      const el = textareaRef;
-      const renderer = props.renderer;
-      if (!el || el.isDestroyed || !renderer) return;
-
-      if (key.name === "backspace") {
-        focusEditor(renderer, el);
-        el.deleteCharBackward();
-        key.preventDefault();
-        return;
-      }
-
-      if (isPrintableKey(key)) {
-        focusEditor(renderer, el);
-        el.insertText(key.sequence);
-        key.preventDefault();
-      }
+      // Let the focused textarea handle printable keys and backspace natively.
+      // Avoid intercepting these keys in the global prompt router.
+      return;
     };
 
     setPromptKeyHandler(handleKey);
