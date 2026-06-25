@@ -306,28 +306,16 @@ async function collectStream(
   return { content, toolCalls, usage };
 }
 
-function lastToolResult(context: ChatMessage[]): string | undefined {
-  for (let i = context.length - 1; i >= 0; i--) {
-    const msg = context[i];
-    if (msg?.role === "tool" && msg.content.trim()) {
-      return msg.content.trim();
-    }
-  }
-  return undefined;
-}
-
 function finishGracefully(
   context: ChatMessage[],
   content: string,
   onEvent: (event: AgentEvent) => void,
 ): void {
-  const stripped = stripMalformedToolText(content);
-  const msg =
-    stripped ||
-    lastToolResult(context) ||
-    "Done — changes saved successfully.";
-  onEvent({ type: "text_delta", delta: msg });
-  context.push({ role: "assistant", content: msg });
+  const stripped = stripMalformedToolText(content).trim();
+  if (stripped) {
+    onEvent({ type: "text_delta", delta: stripped });
+    context.push({ role: "assistant", content: stripped });
+  }
   onEvent({ type: "turn_end" });
 }
 

@@ -33,10 +33,13 @@ const TOOL_SNIPPETS: Record<string, string> = {
 
 const GUIDELINES = [
   "Be concise and direct. Prefer short confirmations over long summaries.",
+  "For normal chat requests, answer in text first. Do not call tools unless the user asked for an action or tools are clearly needed.",
   "Show file paths clearly when reading, writing, or editing files.",
   "Explore before changing: use grep and read to understand existing code and conventions.",
   "For multi-step work, create a plan first, then execute step by step.",
   "After code changes, run verify when a test or typecheck script exists.",
+  "Never create, edit, or overwrite files unless the user explicitly asks for file/code changes, or such changes are strictly required to complete the requested task.",
+  "Do not create example/demo files (like hello.txt) unless the user explicitly asks for them.",
   "Use write or edit once with the full content — do not call the same tool repeatedly with identical arguments.",
   "Use docs for library/API questions; use web_search for news, releases, and current events.",
   "Use schedule for Telegram reminders (in_minutes) and daily tasks (daily_at + kind=task) — e.g. news every morning.",

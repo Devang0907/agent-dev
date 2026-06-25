@@ -112,6 +112,8 @@ export function buildModeSystemAppend(): string {
 Build mode is ACTIVE — full tool access.
 
 You may edit files, run shell commands (with user approval), run tests, and implement changes.
+Use tools only when needed for the user's request. For simple conversation or status questions, respond directly in text.
+Do NOT create or modify files unless the user requested a real change or a file update is required to fulfill the task.
 To start a web app after creating it, use bash (e.g. npm run dev) — dev servers run in the background and return a URL.
 If a plan exists in \`.agent-dev/plans/\` or the plan tool, follow it step by step.`;
 }
