@@ -13,7 +13,7 @@ import {
   type InputSuggestion,
   type SkillNameOption,
 } from "../../commands/slash-commands.js";
-import { focusEditor } from "../../utils/keys.js";
+import { focusEditor, isSubmitKey, setPromptKeyHandler } from "../../utils/keys.js";
 import type { KeyEvent } from "@opentui/core";
 
 const PICKER_VISIBLE = 8;
@@ -27,6 +27,7 @@ function formatPickerOption(s: InputSuggestion): string {
 
 const PROMPT_KEY_BINDINGS = [
   { name: "return", action: "submit" },
+  { name: "enter", action: "submit" },
   { name: "kpenter", action: "submit" },
   { name: "linefeed", action: "submit" },
   { name: "return", shift: true, action: "newline" },
@@ -228,11 +229,18 @@ export function Prompt(props: PromptProps) {
       return;
     }
 
-    if (key.name === "return" && !key.shift && list.length > 0) {
-      handleSubmit();
-      key.preventDefault();
+    if (isSubmitKey(key)) {
+      if (inputText().trim()) {
+        handleSubmit();
+        key.preventDefault();
+      }
     }
   };
+
+  onMount(() => {
+    setPromptKeyHandler(handlePromptKey);
+    onCleanup(() => setPromptKeyHandler(null));
+  });
 
   return (
     <box flexDirection="column" width={props.maxWidth}>
@@ -282,7 +290,6 @@ export function Prompt(props: PromptProps) {
           maxHeight={8}
           initialValue=""
           keyBindings={[...PROMPT_KEY_BINDINGS]}
-          onKeyDown={handlePromptKey}
           onContentChange={() => {
             const text = textareaRef?.plainText ?? "";
             setValue(text);

@@ -64,6 +64,16 @@ export function focusEditor(renderer: CliRenderer | undefined, editor: EditBuffe
   editor.focus();
 }
 
+export function isSubmitKey(key: KeyEvent): boolean {
+  if (key.shift) return false;
+  return (
+    key.name === "return" ||
+    key.name === "enter" ||
+    key.name === "kpenter" ||
+    key.name === "linefeed"
+  );
+}
+
 export function isPrintableKey(key: KeyEvent): boolean {
   return Boolean(
     key.sequence &&

@@ -1,6 +1,6 @@
 {
   "name": "@devang0907/agent-dev",
-  "version": "0.4.7",
+  "version": "0.4.8",
   "description": "Minimal terminal coding agent",
   "type": "module",
   "license": "MIT",
@@ -27,6 +27,7 @@
     "agent": "dist/cli.js"
   },
   "scripts": {
+    "agent": "bun src/cli.ts",
     "dev": "bun src/cli.ts",
     "build": "bun run build.ts",
     "start": "bun dist/cli.js",
