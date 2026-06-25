@@ -90,7 +90,7 @@ export function Sidebar(props: SidebarProps) {
             {(task) => (
               <text fg={task.status === "in_progress" ? theme.primary : theme.textMuted}>
                 {taskMark(task.status)} {task.content.slice(0, 34)}
-                {task.content.length > 34 ? "…" : ""}
+                {task.content.length > 34 ? "…" : " "}
               </text>
             )}
           </For>
@@ -109,7 +109,7 @@ export function Sidebar(props: SidebarProps) {
         </Show>
       </box>
 
-      <text fg={theme.textMuted}>agent-dev v0.4.0</text>
+      <text fg={theme.textMuted}>agent-dev v0.4.2</text>
     </box>
   );
 }

@@ -304,14 +304,21 @@ export function Prompt(props: PromptProps) {
           onSubmit={() => handleSubmit()}
         />
         <box flexDirection="row">
-          <Show when={props.orchestratorMode === "boss"}>
-            <text fg={theme.boss}>Boss</text>
-          </Show>
-          <Show when={props.orchestratorMode !== "boss"}>
-            <text fg={props.agentMode === "plan" ? theme.success : theme.warning}>
-              {props.agentMode === "plan" ? "Plan" : "Build"}
-            </text>
-          </Show>
+          <text
+            fg={
+              props.orchestratorMode === "boss"
+                ? theme.boss
+                : props.agentMode === "plan"
+                  ? theme.success
+                  : theme.warning
+            }
+          >
+            {props.orchestratorMode === "boss"
+              ? "Boss"
+              : props.agentMode === "plan"
+                ? "Plan"
+                : "Build"}
+          </text>
           <text fg={theme.textMuted}> · </text>
           <text fg={theme.text}>{modelRef(props.model)}</text>
         </box>

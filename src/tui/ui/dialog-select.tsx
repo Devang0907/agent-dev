@@ -151,7 +151,7 @@ export function DialogSelect(props: DialogSelectProps) {
       </box>
       <text fg={theme.textMuted} marginTop={1}>
         ↑↓ navigate · Enter select
-        {filtered().length > 0 ? ` · ${safeIndex() + 1}/${filtered().length}` : ""}
+        {filtered().length > 0 ? ` · ${safeIndex() + 1}/${filtered().length}` : " "}
       </text>
       <Show when={props.hint}>
         <text fg={theme.textMuted}>{props.hint}</text>
