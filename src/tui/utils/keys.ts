@@ -1,7 +1,56 @@
 import type { CliRenderer, EditBufferRenderable, KeyEvent } from "@opentui/core";
 
-type KeyHandler = (key: KeyEvent) => void;
+export type KeyHandler = (key: KeyEvent) => void;
 
+let overlayHandler: KeyHandler | null = null;
+let auxiliaryHandler: KeyHandler | null = null;
+let promptHandler: KeyHandler | null = null;
+let chromeHandler: KeyHandler | null = null;
+let installedRenderer: CliRenderer | null = null;
+
+function dispatch(key: KeyEvent): void {
+  if (chromeHandler) {
+    chromeHandler(key);
+    if (key.defaultPrevented) return;
+  }
+  if (overlayHandler) {
+    overlayHandler(key);
+    return;
+  }
+  if (auxiliaryHandler) {
+    auxiliaryHandler(key);
+    if (key.defaultPrevented) return;
+  }
+  promptHandler?.(key);
+}
+
+export function installKeyRouter(renderer: CliRenderer): void {
+  if (installedRenderer === renderer) return;
+  installedRenderer = renderer;
+  renderer.keyInput.on("keypress", dispatch);
+}
+
+export function clearOverlayKeyHandler(): void {
+  overlayHandler = null;
+}
+
+export function setOverlayKeyHandler(handler: KeyHandler | null): void {
+  overlayHandler = handler;
+}
+
+export function setAuxiliaryKeyHandler(handler: KeyHandler | null): void {
+  auxiliaryHandler = handler;
+}
+
+export function setPromptKeyHandler(handler: KeyHandler | null): void {
+  promptHandler = handler;
+}
+
+export function setChromeKeyHandler(handler: KeyHandler | null): void {
+  chromeHandler = handler;
+}
+
+/** @deprecated Use installKeyRouter + set*KeyHandler instead. */
 export function attachKeyHandler(renderer: CliRenderer, handler: KeyHandler): () => void {
   renderer.keyInput.on("keypress", handler);
   return () => renderer.keyInput.off("keypress", handler);

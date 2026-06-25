@@ -1,71 +1,88 @@
-import { For, Show, createEffect, createSignal } from "solid-js";
-import type { CliRenderer } from "@opentui/core";
+import { Show, createEffect, createMemo, createSignal, onCleanup } from "solid-js";
+import type { SelectRenderable } from "@opentui/core";
 import { useTheme } from "../theme/provider.js";
 import type { CommandEntry } from "../commands/registry.js";
 import { fuzzyFilter } from "../commands/registry.js";
 import { truncate } from "../utils/text.js";
-import { listWindowStart } from "../utils/scroll.js";
-import { attachKeyHandler } from "../utils/keys.js";
+import { DIALOG_LIST_VISIBLE_ROWS } from "../utils/scroll.js";
+import { setOverlayKeyHandler } from "../utils/keys.js";
 
 interface CommandPaletteProps {
   open: boolean;
   commands: CommandEntry[];
-  renderer?: CliRenderer;
   onRun: (entry: CommandEntry) => void;
   onClose: () => void;
 }
 
 export function CommandPalette(props: CommandPaletteProps) {
   const theme = useTheme();
+  let selectRef: SelectRenderable | undefined;
   const [filter, setFilter] = createSignal("");
-  const [index, setIndex] = createSignal(0);
+  const [selectedIndex, setSelectedIndex] = createSignal(0);
 
   const filtered = () => fuzzyFilter(props.commands, filter());
-  const safeIndex = () => Math.min(index(), Math.max(0, filtered().length - 1));
-  const listHeight = 12;
-  const windowStart = () => listWindowStart(safeIndex(), filtered().length, listHeight);
-  const visibleItems = () => filtered().slice(windowStart(), windowStart() + listHeight);
+  const selectOptions = createMemo(() =>
+    filtered().map((entry) => ({
+      name: `● ${entry.slash ?? entry.id} — ${truncate(entry.title, 50)}`,
+      description: "",
+      value: entry,
+    })),
+  );
+
+  const resetSelection = () => {
+    setSelectedIndex(0);
+    selectRef?.setSelectedIndex(0);
+  };
+
+  createEffect(() => {
+    filter();
+    resetSelection();
+  });
 
   createEffect(() => {
     if (!props.open) return;
-    const renderer = props.renderer;
-    if (!renderer) return;
 
-    return attachKeyHandler(renderer, (key) => {
+    setOverlayKeyHandler((key) => {
+      const select = selectRef;
       if (key.name === "escape") {
         props.onClose();
         key.preventDefault();
         return;
       }
-      const list = filtered();
       if (key.name === "up") {
-        setIndex((i) => Math.max(0, i - 1));
+        select?.moveUp(1);
+        setSelectedIndex(select?.getSelectedIndex() ?? 0);
         key.preventDefault();
         return;
       }
       if (key.name === "down") {
-        setIndex((i) => Math.min(list.length - 1, i + 1));
+        select?.moveDown(1);
+        setSelectedIndex(select?.getSelectedIndex() ?? 0);
         key.preventDefault();
         return;
       }
-      if (key.name === "return" && list[safeIndex()]) {
-        props.onRun(list[safeIndex()]!);
+      if (key.name === "return" || key.name === "kpenter") {
+        const opt = select?.getSelectedOption();
+        if (opt?.value) props.onRun(opt.value as CommandEntry);
         key.preventDefault();
         return;
       }
       if (key.sequence?.length === 1 && !key.ctrl && !key.meta) {
         setFilter((f) => f + key.sequence);
-        setIndex(0);
         key.preventDefault();
         return;
       }
       if (key.name === "backspace") {
         setFilter((f) => f.slice(0, -1));
-        setIndex(0);
         key.preventDefault();
       }
     });
+
+    onCleanup(() => setOverlayKeyHandler(null));
   });
+
+  const visibleRows = DIALOG_LIST_VISIBLE_ROWS;
+  const safeIndex = () => Math.min(selectedIndex(), Math.max(0, filtered().length - 1));
 
   return (
     <Show when={props.open}>
@@ -100,18 +117,25 @@ export function CommandPalette(props: CommandPaletteProps) {
             <text fg={theme.textMuted}>filter: </text>
             <text fg={theme.text}>{filter() || "…"}</text>
           </box>
-          <box flexDirection="column" marginTop={1} flexGrow={1}>
-            <For each={visibleItems()}>
-              {(entry, localIdx) => {
-                const rowIndex = () => windowStart() + localIdx();
-                const selected = () => rowIndex() === safeIndex();
-                return (
-                  <text fg={selected() ? theme.primary : theme.text}>
-                    {`${selected() ? "› " : "  "}● ${entry.slash ?? entry.id} — ${truncate(entry.title, 50)}`}
-                  </text>
-                );
+          <box marginTop={1}>
+            <select
+              ref={(el) => {
+                selectRef = el;
               }}
-            </For>
+              focused
+              options={selectOptions()}
+              height={visibleRows}
+              showScrollIndicator={true}
+              showDescription={false}
+              textColor={theme.text}
+              selectedTextColor={theme.primary}
+              backgroundColor={theme.backgroundPanel}
+              focusedTextColor={theme.text}
+              onChange={(idx) => setSelectedIndex(idx)}
+              onSelect={(_, opt) => {
+                if (opt?.value) props.onRun(opt.value as CommandEntry);
+              }}
+            />
           </box>
         </box>
       </box>

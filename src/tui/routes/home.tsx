@@ -31,19 +31,18 @@ export function HomeRoute(props: HomeRouteProps) {
           }
         />
         <box marginTop={2} width={maxW()}>
-          <Show when={s().dialog === "none"}>
-            <Prompt
-              model={s().model}
-              agentMode={s().agentMode}
-              orchestratorMode={s().orchestratorMode}
-              skills={s().skillOptions}
-              maxWidth={maxW()}
-              renderer={props.renderer}
-              onSubmit={props.onSubmit}
-              onModeCycle={(dir: 1 | -1) => props.bridge.session.cycleAgentMode(dir)}
-              registerFocus={(fn) => props.bridge.registerPromptFocus(fn)}
-            />
-          </Show>
+          <Prompt
+            model={s().model}
+            agentMode={s().agentMode}
+            orchestratorMode={s().orchestratorMode}
+            skills={s().skillOptions}
+            locked={s().dialog !== "none"}
+            maxWidth={maxW()}
+            renderer={props.renderer}
+            onSubmit={props.onSubmit}
+            onModeCycle={(dir: 1 | -1) => props.bridge.session.cycleAgentMode(dir)}
+            registerFocus={(fn) => props.bridge.registerPromptFocus(fn)}
+          />
         </box>
       </box>
       <box

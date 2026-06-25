@@ -49,16 +49,32 @@ export function capDisplayMessages<T>(messages: T[], max = MAX_DISPLAY_MESSAGES)
   return messages.slice(-max);
 }
 
+/** Visible rows in dialog / palette list panes (must match select height). */
+export const DIALOG_LIST_VISIBLE_ROWS = 10;
+
 /** First visible row when showing a fixed-height list window around the selection. */
 export function listWindowStart(
   selectedIndex: number,
   total: number,
   windowSize: number,
 ): number {
-  if (total <= windowSize) return 0;
+  if (total <= 0 || total <= windowSize) return 0;
   const maxStart = total - windowSize;
   let start = selectedIndex - windowSize + 1;
   if (start < 0) start = 0;
   if (start > maxStart) start = maxStart;
   return start;
+}
+
+/** Absolute indices for the currently visible list slice. */
+export function visibleListIndices(
+  selectedIndex: number,
+  total: number,
+  windowSize: number,
+): number[] {
+  const start = listWindowStart(selectedIndex, total, windowSize);
+  const end = Math.min(start + windowSize, total);
+  const indices: number[] = [];
+  for (let i = start; i < end; i++) indices.push(i);
+  return indices;
 }

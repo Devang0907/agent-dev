@@ -1,14 +1,11 @@
-import { onMount } from "solid-js";
-import type { CliRenderer } from "@opentui/core";
+import { Show } from "solid-js";
 import { useTheme } from "../theme/provider.js";
 import type { PermissionRequest } from "../../agent/loop.js";
 import { LeftBorder } from "../ui/left-border.js";
-import { attachKeyHandler } from "../utils/keys.js";
-import { Show } from "solid-js";
+import { useOverlayKeys } from "../utils/use-overlay-keys.js";
 
 interface PermissionPromptProps {
   request: PermissionRequest;
-  renderer: CliRenderer;
   onApprove: () => void;
   onDeny: () => void;
 }
@@ -16,18 +13,16 @@ interface PermissionPromptProps {
 export function PermissionPrompt(props: PermissionPromptProps) {
   const theme = useTheme();
 
-  onMount(() =>
-    attachKeyHandler(props.renderer, (key) => {
-      if (key.sequence === "y" || key.sequence === "Y") {
-        props.onApprove();
-        key.preventDefault();
-      }
-      if (key.sequence === "n" || key.sequence === "N" || key.name === "escape") {
-        props.onDeny();
-        key.preventDefault();
-      }
-    }),
-  );
+  useOverlayKeys((key) => {
+    if (key.sequence === "y" || key.sequence === "Y") {
+      props.onApprove();
+      key.preventDefault();
+    }
+    if (key.sequence === "n" || key.sequence === "N" || key.name === "escape") {
+      props.onDeny();
+      key.preventDefault();
+    }
+  });
 
   return (
     <box flexDirection="column" marginBottom={1} paddingX={2}>

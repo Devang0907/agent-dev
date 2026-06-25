@@ -8,7 +8,7 @@ import { CommandPalette } from "./components/command-palette.js";
 import { createSessionBridge, type SessionBridge } from "./session-bridge.js";
 import type { AgentSession } from "../agent/session.js";
 import { buildCommandRegistry } from "./commands/registry.js";
-import { attachKeyHandler } from "./utils/keys.js";
+import { installKeyRouter, setChromeKeyHandler } from "./utils/keys.js";
 
 export interface TuiAppProps {
   session: AgentSession;
@@ -42,8 +42,9 @@ function TuiRoot(props: {
       skills: props.bridge.state().skillOptions,
     });
 
-  onMount(() =>
-    attachKeyHandler(props.renderer, (key) => {
+  onMount(() => {
+    installKeyRouter(props.renderer);
+    setChromeKeyHandler((key) => {
       if (key.ctrl && key.sequence === "p") {
         props.bridge.patch({ dialog: dialog() === "palette" ? "none" : "palette" });
         key.preventDefault();
@@ -53,8 +54,8 @@ function TuiRoot(props: {
         props.bridge.session.abort();
         key.preventDefault();
       }
-    }),
-  );
+    });
+  });
 
   return (
     <ThemeProvider>
@@ -69,7 +70,6 @@ function TuiRoot(props: {
         <CommandPalette
           open={dialog() === "palette"}
           commands={commands()}
-          renderer={props.renderer}
           onRun={(entry) => {
             entry.run();
             props.bridge.patch({ dialog: "none" });
@@ -93,6 +93,8 @@ export async function runTui(props: TuiAppProps): Promise<void> {
   } catch (err) {
     throw new Error(`OpenTUI renderer failed to start: ${err instanceof Error ? err.message : err}`);
   }
+
+  installKeyRouter(renderer);
 
   const bridge = createSessionBridge(props.session, props.workdir);
   const { render } = await import("@opentui/solid");

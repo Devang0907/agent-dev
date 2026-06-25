@@ -1,4 +1,5 @@
 import { createSignal, onCleanup } from "solid-js";
+import { clearOverlayKeyHandler } from "./utils/keys.js";
 import type { AgentSession, SessionEvent, ContextUsageState } from "../agent/session.js";
 import type { ChatMessage } from "../providers/types.js";
 import type { Model, ProviderId } from "../providers/types.js";
@@ -152,6 +153,7 @@ export function createSessionBridge(session: AgentSession, workdir: string) {
     setState((s) => ({ ...s, ...partial }));
     const nextDialog = partial.dialog ?? state().dialog;
     if (prevDialog !== "none" && nextDialog === "none") {
+      clearOverlayKeyHandler();
       const refocus = () => focusPromptRef?.();
       queueMicrotask(refocus);
       setTimeout(refocus, 50);
@@ -435,12 +437,10 @@ export function createSessionBridge(session: AgentSession, workdir: string) {
     }
     if (value === "/build") {
       session.setAgentMode("build");
-      patch({ agentMode: "build" });
       return true;
     }
     if (value === "/plan") {
       session.setAgentMode("plan");
-      patch({ agentMode: "plan" });
       return true;
     }
     if (value === "/boss") {

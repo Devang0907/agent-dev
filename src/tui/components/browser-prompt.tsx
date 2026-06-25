@@ -1,27 +1,22 @@
-import { onMount } from "solid-js";
-import type { CliRenderer } from "@opentui/core";
 import { useTheme } from "../theme/provider.js";
 import type { InteractionRequest } from "../../agent/loop.js";
 import { LeftBorder } from "../ui/left-border.js";
-import { attachKeyHandler } from "../utils/keys.js";
+import { useOverlayKeys } from "../utils/use-overlay-keys.js";
 
 interface BrowserPromptProps {
   request: InteractionRequest;
-  renderer: CliRenderer;
   onContinue: (value: string) => void;
 }
 
 export function BrowserPrompt(props: BrowserPromptProps) {
   const theme = useTheme();
 
-  onMount(() =>
-    attachKeyHandler(props.renderer, (key) => {
-      if (key.name === "return") {
-        props.onContinue("continue");
-        key.preventDefault();
-      }
-    }),
-  );
+  useOverlayKeys((key) => {
+    if (key.name === "return") {
+      props.onContinue("continue");
+      key.preventDefault();
+    }
+  });
 
   return (
     <box flexDirection="column" marginBottom={1} paddingX={2}>

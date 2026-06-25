@@ -1,5 +1,5 @@
-import { For, Show, createEffect, createSignal, onCleanup, onMount } from "solid-js";
-import type { CliRenderer, TextareaRenderable } from "@opentui/core";
+import { Show, createEffect, createMemo, createSignal, onCleanup, onMount } from "solid-js";
+import type { CliRenderer, SelectRenderable, TextareaRenderable } from "@opentui/core";
 import type { Model } from "../../../providers/types.js";
 import { modelRef } from "../../../config/models.js";
 import type { AgentMode } from "../../../agent/mode.js";
@@ -13,9 +13,17 @@ import {
   type InputSuggestion,
   type SkillNameOption,
 } from "../../commands/slash-commands.js";
-import { attachKeyHandler, focusEditor, isPrintableKey } from "../../utils/keys.js";
+import { focusEditor, isPrintableKey, setPromptKeyHandler } from "../../utils/keys.js";
+import type { KeyEvent } from "@opentui/core";
 
 const PICKER_VISIBLE = 8;
+
+function formatPickerOption(s: InputSuggestion): string {
+  const cmd = s.label ?? s.cmd;
+  if (!s.desc) return cmd;
+  const desc = formatOneLineDescription(s.desc, 48);
+  return `${cmd} "${desc}"`;
+}
 
 const PROMPT_KEY_BINDINGS = [
   { name: "return", action: "submit" },
@@ -31,6 +39,7 @@ interface PromptProps {
   orchestratorMode: OrchestratorMode;
   skills: SkillNameOption[];
   disabled?: boolean;
+  locked?: boolean;
   running?: boolean;
   maxWidth: number;
   renderer?: CliRenderer;
@@ -43,6 +52,7 @@ interface PromptProps {
 export function Prompt(props: PromptProps) {
   const theme = useTheme();
   let textareaRef: TextareaRenderable | undefined;
+  let pickerSelectRef: SelectRenderable | undefined;
   const [value, setValue] = createSignal("");
   const [suggestions, setSuggestions] = createSignal<InputSuggestion[]>([]);
   const [pickerIndex, setPickerIndex] = createSignal(0);
@@ -53,9 +63,24 @@ export function Prompt(props: PromptProps) {
 
   const inputText = () => textareaRef?.plainText ?? value();
 
+  const selectOptions = createMemo(() =>
+    suggestions().map((s) => ({
+      name: formatPickerOption(s),
+      description: "",
+      value: s,
+    })),
+  );
+
+  const pickerHeight = () => Math.min(PICKER_VISIBLE, Math.max(1, suggestions().length));
+
+  const resetPickerSelection = () => {
+    setPickerIndex(0);
+    pickerSelectRef?.setSelectedIndex(0);
+  };
+
   const updateSuggestions = (text: string) => {
     setSuggestions(getInputSuggestions(text, props.skills));
-    setPickerIndex(0);
+    resetPickerSelection();
   };
 
   const syncText = (text: string) => {
@@ -71,10 +96,20 @@ export function Prompt(props: PromptProps) {
     setSuggestions([]);
     textareaRef?.setText("");
   };
+
   const focusTextarea = () => {
     const el = textareaRef;
-    if (!el || el.isDestroyed || props.disabled) return;
+    if (!el || el.isDestroyed || props.disabled || props.locked) return;
     focusEditor(props.renderer, el);
+  };
+
+  const safePickerIndex = () =>
+    Math.min(pickerIndex(), Math.max(0, suggestions().length - 1));
+
+  const selectedSuggestion = (): InputSuggestion | undefined => {
+    const opt = pickerSelectRef?.getSelectedOption();
+    if (opt?.value) return opt.value as InputSuggestion;
+    return suggestions()[safePickerIndex()];
   };
 
   createEffect(() => {
@@ -82,7 +117,7 @@ export function Prompt(props: PromptProps) {
   });
 
   createEffect(() => {
-    if (props.disabled) {
+    if (props.disabled || props.locked) {
       const el = textareaRef;
       if (el && !el.isDestroyed) el.blur();
       return;
@@ -90,6 +125,11 @@ export function Prompt(props: PromptProps) {
     focusTextarea();
     const id = setTimeout(focusTextarea, 50);
     onCleanup(() => clearTimeout(id));
+  });
+
+  createEffect(() => {
+    suggestions();
+    resetPickerSelection();
   });
 
   onMount(() => {
@@ -117,9 +157,8 @@ export function Prompt(props: PromptProps) {
   const handleSubmit = () => {
     if (props.disabled && !props.running) return;
 
-    const list = suggestions();
-    if (list.length > 0) {
-      const pick = list[pickerIndex()]!;
+    const pick = selectedSuggestion();
+    if (pick) {
       if (isSkillPicker() && pick.cmd.startsWith("/skill ")) {
         applySuggestion(pick);
         return;
@@ -140,11 +179,9 @@ export function Prompt(props: PromptProps) {
     clearInput();
   };
 
-  createEffect(() => {
-    const renderer = props.renderer;
-    if (!renderer) return;
-
-    return attachKeyHandler(renderer, (key) => {
+  onMount(() => {
+    const handleKey = (key: KeyEvent) => {
+      if (props.locked) return;
       if (props.disabled && !props.running) return;
       if (key.name === "escape" && props.running) {
         key.preventDefault();
@@ -152,10 +189,17 @@ export function Prompt(props: PromptProps) {
       }
 
       const list = suggestions();
+      const select = pickerSelectRef;
       if (list.length > 0 && (key.name === "up" || key.name === "down")) {
-        setPickerIndex((i) =>
-          key.name === "up" ? Math.max(0, i - 1) : Math.min(list.length - 1, i + 1),
-        );
+        if (select) {
+          if (key.name === "up") select.moveUp(1);
+          else select.moveDown(1);
+          setPickerIndex(select.getSelectedIndex());
+        } else {
+          setPickerIndex((i) =>
+            key.name === "up" ? Math.max(0, i - 1) : Math.min(list.length - 1, i + 1),
+          );
+        }
         key.preventDefault();
         return;
       }
@@ -166,8 +210,9 @@ export function Prompt(props: PromptProps) {
           const completed = completeInput(v, props.skills);
           if (completed) {
             syncText(completed);
-          } else if (list.length > 0) {
-            applySuggestion(list[pickerIndex()]!);
+          } else {
+            const pick = selectedSuggestion();
+            if (pick) applySuggestion(pick);
           }
         } else if (!pickerOpen() && props.onModeCycle) {
           props.onModeCycle(key.shift ? -1 : 1);
@@ -182,10 +227,9 @@ export function Prompt(props: PromptProps) {
         return;
       }
 
-      if (key.defaultPrevented) return;
-
       const el = textareaRef;
-      if (!el || el.isDestroyed) return;
+      const renderer = props.renderer;
+      if (!el || el.isDestroyed || !renderer) return;
 
       if (key.name === "backspace") {
         focusEditor(renderer, el);
@@ -199,10 +243,11 @@ export function Prompt(props: PromptProps) {
         el.insertText(key.sequence);
         key.preventDefault();
       }
-    });
-  });
+    };
 
-  const visible = () => suggestions().slice(0, PICKER_VISIBLE);
+    setPromptKeyHandler(handleKey);
+    onCleanup(() => setPromptKeyHandler(null));
+  });
 
   return (
     <box flexDirection="column" width={props.maxWidth}>
@@ -215,23 +260,29 @@ export function Prompt(props: PromptProps) {
           paddingX={1}
           marginBottom={1}
         >
-          <For each={visible()}>
-            {(s, row) => {
-              const desc = s.desc ? formatOneLineDescription(s.desc, 48) : "";
-              const label = s.label ?? s.cmd;
-              const line = `${row() === pickerIndex() ? "› " : "  "}${label}${desc ? ` — ${desc}` : ""}`;
-              return (
-                <text fg={row() === pickerIndex() ? theme.primary : theme.text}>{line}</text>
-              );
+          <select
+            ref={(el) => {
+              pickerSelectRef = el;
             }}
-          </For>
+            options={selectOptions()}
+            height={pickerHeight()}
+            showScrollIndicator={suggestions().length > pickerHeight()}
+            showDescription={false}
+            itemSpacing={0}
+            textColor={theme.text}
+            selectedTextColor={theme.primary}
+            selectedBackgroundColor="#1a3a5f"
+            backgroundColor={theme.backgroundPanel}
+            focusedTextColor={theme.text}
+            onChange={(idx) => setPickerIndex(idx)}
+          />
         </box>
       </Show>
 
       <box
         flexDirection="column"
         borderStyle="rounded"
-        borderColor={props.disabled ? theme.border : theme.primary}
+        borderColor={props.disabled || props.locked ? theme.border : theme.primary}
         backgroundColor={theme.backgroundPanel}
         paddingX={1}
         paddingY={1}
@@ -240,7 +291,7 @@ export function Prompt(props: PromptProps) {
           ref={(el) => {
             textareaRef = el;
           }}
-          focused={!props.disabled}
+          focused={!props.disabled && !props.locked}
           placeholder="Ask anything…"
           maxHeight={8}
           initialValue=""

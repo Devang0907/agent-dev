@@ -1,9 +1,8 @@
-import { For, Show, createEffect, createSignal, onMount } from "solid-js";
-import type { CliRenderer } from "@opentui/core";
+import { Show, createEffect, createMemo, createSignal } from "solid-js";
+import type { SelectRenderable } from "@opentui/core";
 import { useTheme } from "../theme/provider.js";
-import { truncate } from "../utils/text.js";
-import { listWindowStart } from "../utils/scroll.js";
-import { attachKeyHandler } from "../utils/keys.js";
+import { DIALOG_LIST_VISIBLE_ROWS } from "../utils/scroll.js";
+import { useOverlayKeys } from "../utils/use-overlay-keys.js";
 
 export interface DialogSelectItem {
   id: string;
@@ -20,13 +19,13 @@ interface DialogSelectProps {
   hint?: string;
   onSelect: (item: DialogSelectItem) => void;
   onClose: () => void;
-  renderer?: CliRenderer;
 }
 
 export function DialogSelect(props: DialogSelectProps) {
   const theme = useTheme();
-  const [index, setIndex] = createSignal(0);
+  let selectRef: SelectRenderable | undefined;
   const [filterText, setFilterText] = createSignal(props.filter ?? "");
+  const [selectedIndex, setSelectedIndex] = createSignal(0);
 
   const filtered = () => {
     const q = filterText().toLowerCase();
@@ -39,56 +38,69 @@ export function DialogSelect(props: DialogSelectProps) {
     );
   };
 
+  const selectOptions = createMemo(() =>
+    filtered().map((item) => ({
+      name: `${item.marker ?? "●"} ${item.title}`,
+      description: item.subtitle ?? "",
+      value: item,
+    })),
+  );
+
+  const resetSelection = () => {
+    setSelectedIndex(0);
+    selectRef?.setSelectedIndex(0);
+  };
+
   createEffect(() => {
     props.items;
     props.filter;
-    setIndex(0);
     if (props.filter) setFilterText(props.filter);
+    resetSelection();
   });
 
-  onMount(() => {
-    const renderer = props.renderer;
-    if (!renderer) return;
-
-    return attachKeyHandler(renderer, (key) => {
-      const list = filtered();
-      if (key.name === "escape") {
-        props.onClose();
-        key.preventDefault();
-        return;
-      }
-      if (key.name === "up" || key.name === "pageup") {
-        setIndex((i) => Math.max(0, i - (key.name === "pageup" ? 5 : 1)));
-        key.preventDefault();
-        return;
-      }
-      if (key.name === "down" || key.name === "pagedown") {
-        setIndex((i) => Math.min(list.length - 1, i + (key.name === "pagedown" ? 5 : 1)));
-        key.preventDefault();
-        return;
-      }
-      if (key.name === "return" && list[index()]) {
-        props.onSelect(list[index()]!);
-        key.preventDefault();
-        return;
-      }
-      if (key.sequence && key.sequence.length === 1 && !key.ctrl && !key.meta) {
-        setFilterText((f) => f + key.sequence);
-        setIndex(0);
-        key.preventDefault();
-      }
-      if (key.name === "backspace") {
-        setFilterText((f) => f.slice(0, -1));
-        setIndex(0);
-        key.preventDefault();
-      }
-    });
+  createEffect(() => {
+    filterText();
+    resetSelection();
   });
 
-  const safeIndex = () => Math.min(index(), Math.max(0, filtered().length - 1));
-  const listHeight = 12;
-  const windowStart = () => listWindowStart(safeIndex(), filtered().length, listHeight);
-  const visibleItems = () => filtered().slice(windowStart(), windowStart() + listHeight);
+  useOverlayKeys((key) => {
+    const select = selectRef;
+    if (key.name === "escape") {
+      props.onClose();
+      key.preventDefault();
+      return;
+    }
+    if (key.name === "up" || key.name === "pageup") {
+      select?.moveUp(key.name === "pageup" ? 5 : 1);
+      setSelectedIndex(select?.getSelectedIndex() ?? 0);
+      key.preventDefault();
+      return;
+    }
+    if (key.name === "down" || key.name === "pagedown") {
+      select?.moveDown(key.name === "pagedown" ? 5 : 1);
+      setSelectedIndex(select?.getSelectedIndex() ?? 0);
+      key.preventDefault();
+      return;
+    }
+    if ((key.name === "return" || key.name === "kpenter") && !key.shift) {
+      const opt = select?.getSelectedOption();
+      if (opt?.value) props.onSelect(opt.value as DialogSelectItem);
+      key.preventDefault();
+      return;
+    }
+    if (key.sequence && key.sequence.length === 1 && !key.ctrl && !key.meta) {
+      setFilterText((f) => f + key.sequence);
+      key.preventDefault();
+      return;
+    }
+    if (key.name === "backspace") {
+      setFilterText((f) => f.slice(0, -1));
+      key.preventDefault();
+    }
+  });
+
+  const visibleRows = DIALOG_LIST_VISIBLE_ROWS;
+  const safeIndex = () => Math.min(selectedIndex(), Math.max(0, filtered().length - 1));
 
   return (
     <box flexDirection="column" width="100%">
@@ -110,28 +122,31 @@ export function DialogSelect(props: DialogSelectProps) {
           <text fg={theme.text}>{props.filter}</text>
         </box>
       </Show>
-      <box
-        flexDirection="column"
-        marginTop={1}
-        borderStyle="rounded"
-        borderColor={theme.border}
-        paddingX={1}
-        height={listHeight}
-        overflow="hidden"
-      >
-        <For each={visibleItems()}>
-          {(item, localIdx) => {
-            const rowIndex = () => windowStart() + localIdx();
-            const selected = () => rowIndex() === safeIndex();
-            return (
-              <text fg={selected() ? theme.primary : theme.text}>
-                {`${selected() ? "› " : "  "}${item.marker ?? "●"} ${truncate(item.title, 72)}${item.subtitle ? ` ${truncate(item.subtitle, 40)}` : ""}`}
-              </text>
-            );
-          }}
-        </For>
-        <Show when={filtered().length === 0}>
-          <text fg={theme.textMuted}>No matches.</text>
+      <box marginTop={1}>
+        <Show
+          when={selectOptions().length > 0}
+          fallback={<text fg={theme.textMuted}>No matches.</text>}
+        >
+          <select
+            ref={(el) => {
+              selectRef = el;
+            }}
+            focused
+            options={selectOptions()}
+            height={visibleRows}
+            showScrollIndicator={true}
+            showDescription={true}
+            textColor={theme.text}
+            descriptionColor={theme.textMuted}
+            selectedTextColor={theme.primary}
+            selectedDescriptionColor={theme.textMuted}
+            backgroundColor={theme.backgroundPanel}
+            focusedTextColor={theme.text}
+            onChange={(idx) => setSelectedIndex(idx)}
+            onSelect={(_, opt) => {
+              if (opt?.value) props.onSelect(opt.value as DialogSelectItem);
+            }}
+          />
         </Show>
       </box>
       <text fg={theme.textMuted} marginTop={1}>

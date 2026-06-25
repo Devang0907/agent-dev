@@ -174,7 +174,15 @@ export class AgentSession extends EventEmitter {
   }
 
   setAgentMode(mode: AgentMode): void {
-    if (this.settings.agentMode === mode) return;
+    const bossActive = this.getOrchestratorMode() === "boss";
+    const sameMode = this.settings.agentMode === mode;
+    if (sameMode && !bossActive) return;
+
+    if (bossActive) {
+      this.setOrchestratorMode("off");
+    }
+    if (sameMode) return;
+
     this.settings = setAgentMode(this.settings, mode);
     this.emit("event", { type: "agent_mode_changed", mode } satisfies SessionEvent);
   }

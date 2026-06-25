@@ -11,10 +11,10 @@ import type { ProviderId } from "../../providers/types.js";
 import { getCompactionSettings, DEFAULT_COMPACTION_SETTINGS } from "../../config/settings.js";
 import type { ThinkingLevel } from "../../providers/types.js";
 import { discoverSkills } from "../../agent/skills.js";
-import { createEffect, createSignal, onMount } from "solid-js";
+import { createSignal, onMount } from "solid-js";
 import { useTheme } from "../theme/provider.js";
 import { PROVIDER_ENV_VARS } from "../../providers/registry.js";
-import { attachKeyHandler } from "../utils/keys.js";
+import { useOverlayKeys } from "../utils/use-overlay-keys.js";
 
 interface DialogsProps {
   bridge: SessionBridge;
@@ -27,7 +27,6 @@ function fuzzyMatch(text: string, query: string): boolean {
 }
 
 export function Dialogs(props: DialogsProps) {
-  const theme = useTheme();
   const s = () => props.bridge.state();
   const dialog = () => s().dialog;
 
@@ -132,7 +131,6 @@ export function Dialogs(props: DialogsProps) {
             items={modelItems()}
             filter={s().modelFilter}
             hint="● configured · ○ needs API key"
-            renderer={props.renderer}
             onSelect={selectModel}
             onClose={() => props.bridge.patch({ dialog: "none", modelFilter: undefined })}
           />
@@ -144,7 +142,6 @@ export function Dialogs(props: DialogsProps) {
           <DialogSelect
             title="/sessions"
             items={sessionItems()}
-            renderer={props.renderer}
             onSelect={(item) => {
               const sess = SessionManager.listSessions().find((x) => x.sessionId === item.id);
               if (sess) props.bridge.loadSession(sess);
@@ -159,7 +156,6 @@ export function Dialogs(props: DialogsProps) {
           <DialogSelect
             title="/settings"
             items={settingsItems()}
-            renderer={props.renderer}
             onSelect={selectSettings}
             onClose={() => props.bridge.patch({ dialog: "none" })}
           />
@@ -172,7 +168,6 @@ export function Dialogs(props: DialogsProps) {
             title="/skills"
             items={skillItems()}
             hint="Run: agent skills add <owner/repo>"
-            renderer={props.renderer}
             onSelect={() => props.bridge.patch({ dialog: "none" })}
             onClose={() => props.bridge.patch({ dialog: "none" })}
           />
@@ -210,22 +205,19 @@ function ApiKeyDialog(props: { bridge: SessionBridge; renderer: CliRenderer }) {
     if (key) props.bridge.saveApiKey(key);
   };
 
-  createEffect(() => {
-    const renderer = props.renderer;
-    return attachKeyHandler(renderer, (key) => {
-      if (key.name === "escape") {
-        close();
+  useOverlayKeys((key) => {
+    if (key.name === "escape") {
+      close();
+      key.preventDefault();
+      return;
+    }
+    if ((key.name === "return" || key.name === "kpenter") && !key.shift) {
+      const current = readInput().trim();
+      if (current) {
+        saveKey(current);
         key.preventDefault();
-        return;
       }
-      if ((key.name === "return" || key.name === "kpenter") && !key.shift) {
-        const current = readInput().trim();
-        if (current) {
-          saveKey(current);
-          key.preventDefault();
-        }
-      }
-    });
+    }
   });
 
   onMount(() => () => {
@@ -270,33 +262,31 @@ function ConnectDialog(props: { bridge: SessionBridge; renderer: CliRenderer }) 
     (props.bridge.state().settings.telegram?.allowedUserIds ?? []).join(", "),
   );
 
-  createEffect(() =>
-    attachKeyHandler(props.renderer, (key) => {
-      if (key.name === "escape") {
-        props.bridge.patch({ dialog: "none" });
-        key.preventDefault();
-        return;
-      }
-      if (key.ctrl && key.sequence === "s") {
-        const parsed = ids()
-          .split(",")
-          .map((p) => p.trim())
-          .filter(Boolean)
-          .map((p) => Number.parseInt(p, 10));
-        if (parsed.some((id) => !Number.isFinite(id))) return;
-        const updated = {
-          ...props.bridge.state().settings,
-          telegram: {
-            botToken: token().trim() || undefined,
-            allowedUserIds: parsed.length > 0 ? parsed : undefined,
-          },
-        };
-        props.bridge.session.updateSettings(updated);
-        props.bridge.patch({ settings: updated, dialog: "none" });
-        key.preventDefault();
-      }
-    }),
-  );
+  useOverlayKeys((key) => {
+    if (key.name === "escape") {
+      props.bridge.patch({ dialog: "none" });
+      key.preventDefault();
+      return;
+    }
+    if (key.ctrl && key.sequence === "s") {
+      const parsed = ids()
+        .split(",")
+        .map((p) => p.trim())
+        .filter(Boolean)
+        .map((p) => Number.parseInt(p, 10));
+      if (parsed.some((id) => !Number.isFinite(id))) return;
+      const updated = {
+        ...props.bridge.state().settings,
+        telegram: {
+          botToken: token().trim() || undefined,
+          allowedUserIds: parsed.length > 0 ? parsed : undefined,
+        },
+      };
+      props.bridge.session.updateSettings(updated);
+      props.bridge.patch({ settings: updated, dialog: "none" });
+      key.preventDefault();
+    }
+  });
 
   return (
     <DialogOverlay open onClose={() => props.bridge.patch({ dialog: "none" })}>

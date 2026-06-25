@@ -6,6 +6,7 @@ import {
   effectiveScrollTop,
   isFollowing,
   listWindowStart,
+  visibleListIndices,
 } from "../../src/tui/utils/scroll.js";
 
 describe("formatToolForDisplay", () => {
@@ -43,5 +44,9 @@ describe("scroll helpers", () => {
     expect(listWindowStart(11, 20, 12)).toBe(0);
     expect(listWindowStart(12, 20, 12)).toBe(1);
     expect(listWindowStart(19, 20, 12)).toBe(8);
+    expect(listWindowStart(2, 7, 5)).toBe(0);
+    expect(listWindowStart(5, 7, 5)).toBe(1);
+    expect(listWindowStart(6, 7, 5)).toBe(2);
+    expect(visibleListIndices(6, 7, 5)).toEqual([2, 3, 4, 5, 6]);
   });
 });

@@ -13,7 +13,7 @@ import type { DisplayMessage } from "../../display.js";
 import { contentWidth, promptMaxWidth, WIDE_BREAKPOINT } from "../../utils/text.js";
 import { scrollToBottom } from "../../utils/scroll.js";
 import { defaultScrollAcceleration } from "../../utils/scroll-acceleration.js";
-import { attachKeyHandler } from "../../utils/keys.js";
+import { setAuxiliaryKeyHandler } from "../../utils/keys.js";
 
 interface SessionRouteProps {
   bridge: SessionBridge;
@@ -45,7 +45,7 @@ export function SessionRoute(props: SessionRouteProps) {
   onMount(() => {
     props.bridge.setScrollToLatest(goToBottom);
 
-    const detach = attachKeyHandler(props.renderer, (key) => {
+    setAuxiliaryKeyHandler((key) => {
       const scroll = scrollRef;
       if (!scroll || scroll.isDestroyed) return;
       if (s().dialog !== "none") return;
@@ -72,7 +72,7 @@ export function SessionRoute(props: SessionRouteProps) {
     });
 
     onCleanup(() => {
-      detach();
+      setAuxiliaryKeyHandler(null);
       props.bridge.setScrollToLatest(null);
     });
   });
@@ -144,7 +144,6 @@ export function SessionRoute(props: SessionRouteProps) {
             <box flexShrink={0}>
               <PermissionPrompt
                 request={req()}
-                renderer={props.renderer}
                 onApprove={() => {
                   props.bridge.session.respondToPermission(true);
                   props.bridge.patch({ pendingCommand: null });
@@ -163,7 +162,6 @@ export function SessionRoute(props: SessionRouteProps) {
             <box flexShrink={0}>
               <BrowserPrompt
                 request={req()}
-                renderer={props.renderer}
                 onContinue={(value) => {
                   props.bridge.session.respondToInteraction(value);
                   props.bridge.patch({ pendingInteraction: null });
@@ -173,7 +171,7 @@ export function SessionRoute(props: SessionRouteProps) {
           )}
         </Show>
 
-        <Show when={!s().pendingCommand && !s().pendingInteraction && s().dialog === "none"}>
+        <Show when={!s().pendingCommand && !s().pendingInteraction}>
           <box flexShrink={0} paddingX={2} paddingY={1} alignItems="center">
             <Prompt
               model={s().model}
@@ -181,6 +179,7 @@ export function SessionRoute(props: SessionRouteProps) {
               orchestratorMode={s().orchestratorMode}
               skills={s().skillOptions}
               disabled={s().running}
+              locked={s().dialog !== "none"}
               running={s().running}
               maxWidth={promptMaxWidth(props.renderer.width)}
               renderer={props.renderer}
