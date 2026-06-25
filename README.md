@@ -1,6 +1,6 @@
 # agent-dev
 
-A minimal terminal coding agent with an OpenTUI terminal UI (OpenCode-style layout). Chat with an AI that can read and edit code, search the web, run git/shell commands (with approval), use MCP servers, load skills, schedule Telegram reminders and daily tasks, and optionally delegate work through a **boss orchestrator** that coordinates specialized worker agents.
+A minimal terminal coding agent with an **OpenTUI + SolidJS** terminal UI. Chat with an AI that can read and edit code, search the web, run git/shell commands (with approval), use MCP servers, load skills, schedule Telegram reminders and daily tasks, and optionally delegate work through a **boss orchestrator** that coordinates specialized worker agents.
 
 ## Quick start
 
@@ -97,7 +97,7 @@ agent skills list
 
 ## Telegram gateway
 
-Chat with agent-dev from your phone via Telegram (OpenClaw-style). The gateway runs on your PC, uses long-polling (no public URL or port forwarding), and forwards DMs to the agent. Shell/git/exec approvals arrive as **Approve / Deny** inline buttons. You can also set **reminders** and **daily tasks** (e.g. morning news) that fire while the gateway is running.
+Chat with agent-dev from your phone via Telegram. The gateway runs on your PC, uses long-polling (no public URL or port forwarding), and forwards DMs to the agent. Shell/git/exec approvals arrive as **Approve / Deny** inline buttons. You can also set **reminders** and **daily tasks** (e.g. morning news) that fire while the gateway is running.
 
 On first connect, send `/start` (or any message) to receive a welcome guide with available commands and capabilities.
 
@@ -133,7 +133,7 @@ export TELEGRAM_ALLOWED_USER_IDS=987654321
 ### Run
 
 ```bash
-npm run dev -- telegram --workdir D:/projects/MyRepo
+bun run dev -- telegram --workdir D:/projects/MyRepo
 # or after build:
 agent telegram --workdir D:/projects/MyRepo
 agent telegram --boss --verbose
@@ -262,7 +262,7 @@ Telegram: `/compact` (same as TUI).
 
 ## Project rules
 
-Project rules are markdown instructions (Pi/Cursor-style) injected into the system prompt automatically.
+Project rules are markdown instructions injected into the system prompt automatically from `AGENTS.md` and related files.
 
 **Discovery order** (root → specific; all matching files are concatenated):
 
@@ -334,7 +334,7 @@ Read-only git commands and `SELECT` queries stay allowed regardless of rules.
 
 ### Build and Plan
 
-Switch between **Build** and **Plan** mode like OpenCode:
+Switch between **Build** and **Plan** mode from the prompt footer, slash commands, or Tab:
 
 | Mode | Toggle | Behavior |
 |------|--------|----------|
@@ -404,7 +404,7 @@ File operations are restricted to the current working directory. Shell commands,
 Requires a one-time browser install:
 
 ```bash
-npx playwright install chromium
+bunx playwright install chromium
 ```
 
 The browser runs **visible by default** so you can watch the agent. Session state (tabs, cookies) persists across tool calls within a chat session.
@@ -456,7 +456,7 @@ Use the `mcp` tool with `list_servers`, `list_tools`, and `call_tool` actions.
 
 ### Skills
 
-Skills use the [Vercel Agent Skills](https://vercel.com/docs/agent-resources/skills) ecosystem (same format as OpenCode and Cursor).
+Skills use the [Vercel Agent Skills](https://vercel.com/docs/agent-resources/skills) format (compatible with the Vercel skills CLI and Cursor).
 
 **Install skills:**
 
@@ -577,7 +577,7 @@ src/
 │   ├── telegram/            # Telegram bot daemon (grammY)
 │   └── scheduler.ts         # Fires due reminders and daily tasks
 ├── providers/               # OpenAI, Groq, Gemini, OpenRouter
-├── tui/                     # OpenTUI + Solid terminal UI (OpenCode-style)
+├── tui/                     # OpenTUI + SolidJS terminal UI
 └── modes/print-mode.ts      # Headless / CI output
 ```
 
