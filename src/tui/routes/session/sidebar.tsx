@@ -1,4 +1,4 @@
-import { For, Show } from "solid-js";
+import { For } from "solid-js";
 import { useTheme } from "../../theme/provider.js";
 import type { PlanTask } from "../../../agent/tools/plan.js";
 import type { ContextUsageState } from "../../../agent/session.js";
@@ -73,19 +73,14 @@ export function Sidebar(props: SidebarProps) {
 
       <box marginTop={1}>
         <text fg={theme.textMuted}>⌂ {shortPath(props.workdir, 36)}</text>
-        <Show when={branch()}>
-          <text fg={theme.primary}> ⎇ {branch()}</text>
-        </Show>
+        {branch() ? <text fg={theme.primary}> ⎇ {branch()}</text> : null}
       </box>
 
       <box marginTop={2}>
         <text fg={theme.text} attributes={1}>
           Plan
         </text>
-        <Show
-          when={props.planTasks.length > 0}
-          fallback={<text fg={theme.textMuted}> No plan yet</text>}
-        >
+        {props.planTasks.length > 0 ? (
           <For each={props.planTasks.slice(0, 12)}>
             {(task) => (
               <text fg={task.status === "in_progress" ? theme.primary : theme.textMuted}>
@@ -94,22 +89,24 @@ export function Sidebar(props: SidebarProps) {
               </text>
             )}
           </For>
-        </Show>
+        ) : (
+          <text fg={theme.textMuted}> No plan yet</text>
+        )}
       </box>
 
       <box marginTop={2} flexGrow={1}>
         <text fg={theme.textMuted}>
           MCP {mcpCount()} · Skills {props.skillsCount}
         </text>
-        <Show when={props.contextUsage.tokens > 0}>
+        {props.contextUsage.tokens > 0 ? (
           <text fg={theme.textMuted}>
             ctx {formatTokenCount(props.contextUsage.tokens)}/
             {formatTokenCount(props.contextUsage.window)}
           </text>
-        </Show>
+        ) : null}
       </box>
 
-      <text fg={theme.textMuted}>agent-dev v0.4.2</text>
+      <text fg={theme.textMuted}>agent-dev v0.4.3</text>
     </box>
   );
 }

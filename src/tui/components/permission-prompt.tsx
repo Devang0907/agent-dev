@@ -1,4 +1,3 @@
-import { Show } from "solid-js";
 import { useTheme } from "../theme/provider.js";
 import type { PermissionRequest } from "../../agent/loop.js";
 import { LeftBorder } from "../ui/left-border.js";
@@ -30,12 +29,12 @@ export function PermissionPrompt(props: PermissionPromptProps) {
         <text fg={theme.text} attributes={1}>
           Approve this action?
         </text>
-        <Show when={props.request.workerId && props.request.runId}>
+        {props.request.workerId && props.request.runId ? (
           <text fg={theme.textMuted}>
             {" "}
             Worker {props.request.workerId} #{props.request.runId}
           </text>
-        </Show>
+        ) : null}
         <text fg={theme.textMuted}> y approve · n or Esc deny</text>
         <box
           marginTop={1}

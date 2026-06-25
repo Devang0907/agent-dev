@@ -7,7 +7,6 @@ import { modelRef } from "../../config/models.js";
 import { shortPath, promptMaxWidth } from "../utils/text.js";
 import { formatTokenCount } from "../../agent/compaction/tokens.js";
 import { UPDATE_COMMAND } from "../../version/check.js";
-import { Show } from "solid-js";
 interface HomeRouteProps {
   bridge: SessionBridge;
   renderer: CliRenderer;
@@ -58,16 +57,18 @@ export function HomeRoute(props: HomeRouteProps) {
         <text fg={theme.textMuted}>{shortPath(props.bridge.workdir)}</text>
         <text fg={theme.textMuted}> · </text>
         <text fg={theme.text}>{modelRef(s().model)}</text>
-        <Show when={s().contextUsage.tokens > 0}>
+        {s().contextUsage.tokens > 0 ? (
           <text fg={theme.textMuted}>
             {" · ctx "}
             {formatTokenCount(s().contextUsage.tokens)}/{formatTokenCount(s().contextUsage.window)}
           </text>
-        </Show>
-        <Show when={s().updateInfo}>
+        ) : null}
+        {s().updateInfo ? (
           <text fg={theme.warning}> · ↑ v{s().updateInfo!.latest}</text>
+        ) : null}
+        {s().updateInfo ? (
           <text fg={theme.textMuted}> · {UPDATE_COMMAND}</text>
-        </Show>
+        ) : null}
       </box>
     </box>
   );

@@ -1,4 +1,4 @@
-import { Show, createEffect, createMemo, createSignal, onCleanup, onMount } from "solid-js";
+import { createEffect, createMemo, createSignal, onCleanup, onMount } from "solid-js";
 import type { CliRenderer, SelectRenderable, TextareaRenderable } from "@opentui/core";
 import type { Model } from "../../../providers/types.js";
 import { modelRef } from "../../../config/models.js";
@@ -251,7 +251,7 @@ export function Prompt(props: PromptProps) {
 
   return (
     <box flexDirection="column" width={props.maxWidth}>
-      <Show when={pickerOpen()}>
+      {pickerOpen() ? (
         <box
           flexDirection="column"
           borderStyle="rounded"
@@ -277,7 +277,7 @@ export function Prompt(props: PromptProps) {
             onChange={(idx) => setPickerIndex(idx)}
           />
         </box>
-      </Show>
+      ) : null}
 
       <box
         flexDirection="column"
@@ -325,19 +325,16 @@ export function Prompt(props: PromptProps) {
       </box>
 
       <box marginTop={1}>
-        <Show
-          when={props.running}
-          fallback={
-            <text fg={theme.textMuted}>
-              Tab switch mode · Shift+Tab reverse · Enter send · Shift+Enter newline · Ctrl+P palette
-            </text>
-          }
-        >
+        {props.running ? (
           <box flexDirection="row">
             <text fg={theme.primary}>{SPINNER_FRAMES[spinIdx()]}</text>
             <text fg={theme.textMuted}> esc interrupt</text>
           </box>
-        </Show>
+        ) : (
+          <text fg={theme.textMuted}>
+            Tab switch mode · Shift+Tab reverse · Enter send · Shift+Enter newline · Ctrl+P palette
+          </text>
+        )}
       </box>
     </box>
   );

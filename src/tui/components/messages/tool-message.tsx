@@ -1,4 +1,4 @@
-import { For, Show } from "solid-js";
+import { For } from "solid-js";
 import { useTheme } from "../../theme/provider.js";
 import { TOOL_ICONS } from "../../theme/tokens.js";
 import { collapseToolOutput } from "../../utils/collapse-tool-output.js";
@@ -45,9 +45,9 @@ export function ToolMessage(props: ToolMessageProps) {
           );
         }}
       </For>
-      <Show when={collapsed().overflow}>
+      {collapsed().overflow ? (
         <text fg={theme.textMuted}>     … output truncated</text>
-      </Show>
+      ) : null}
     </box>
   );
 }

@@ -1,4 +1,3 @@
-import { Show } from "solid-js";
 import type { Model } from "../../../providers/types.js";
 import { modelRef } from "../../../config/models.js";
 import { useTheme } from "../../theme/provider.js";
@@ -33,9 +32,9 @@ export function AssistantMessage(props: AssistantMessageProps) {
         streaming={props.streaming ?? false}
         conceal
       />
-      <Show when={props.showMeta && props.model}>
-        <text fg={theme.textMuted}> ▣ {modelRef(props.model!)}</text>
-      </Show>
+      {props.showMeta && props.model ? (
+        <text fg={theme.textMuted}> ▣ {modelRef(props.model)}</text>
+      ) : null}
     </box>
   );
 }

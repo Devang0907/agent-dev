@@ -1,4 +1,4 @@
-import { For, Show, createMemo, onCleanup, onMount } from "solid-js";
+import { For, createMemo, onCleanup, onMount } from "solid-js";
 import type { CliRenderer, ScrollBoxRenderable } from "@opentui/core";
 import { useTheme } from "../../theme/provider.js";
 import { UserMessage } from "../../components/messages/user-message.js";
@@ -127,51 +127,47 @@ export function SessionRoute(props: SessionRouteProps) {
         >
           <box height={1} flexShrink={0} />
           <For each={s().displayMessages}>{(msg) => renderMessage(msg)}</For>
-          <Show when={s().streamingText}>
+          {s().streamingText ? (
             <AssistantMessage
               content={s().streamingText}
               width={width()}
               streaming
             />
-          </Show>
-          <Show when={s().toolProgress}>
+          ) : null}
+          {s().toolProgress ? (
             <ToolMessage content={s().toolProgress} toolName="browser" width={width()} />
-          </Show>
+          ) : null}
         </scrollbox>
 
-        <Show when={s().pendingCommand}>
-          {(req) => (
-            <box flexShrink={0}>
-              <PermissionPrompt
-                request={req()}
-                onApprove={() => {
-                  props.bridge.session.respondToPermission(true);
-                  props.bridge.patch({ pendingCommand: null });
-                }}
-                onDeny={() => {
-                  props.bridge.session.respondToPermission(false);
-                  props.bridge.patch({ pendingCommand: null });
-                }}
-              />
-            </box>
-          )}
-        </Show>
+        {s().pendingCommand ? (
+          <box flexShrink={0}>
+            <PermissionPrompt
+              request={s().pendingCommand!}
+              onApprove={() => {
+                props.bridge.session.respondToPermission(true);
+                props.bridge.patch({ pendingCommand: null });
+              }}
+              onDeny={() => {
+                props.bridge.session.respondToPermission(false);
+                props.bridge.patch({ pendingCommand: null });
+              }}
+            />
+          </box>
+        ) : null}
 
-        <Show when={s().pendingInteraction}>
-          {(req) => (
-            <box flexShrink={0}>
-              <BrowserPrompt
-                request={req()}
-                onContinue={(value) => {
-                  props.bridge.session.respondToInteraction(value);
-                  props.bridge.patch({ pendingInteraction: null });
-                }}
-              />
-            </box>
-          )}
-        </Show>
+        {s().pendingInteraction ? (
+          <box flexShrink={0}>
+            <BrowserPrompt
+              request={s().pendingInteraction!}
+              onContinue={(value) => {
+                props.bridge.session.respondToInteraction(value);
+                props.bridge.patch({ pendingInteraction: null });
+              }}
+            />
+          </box>
+        ) : null}
 
-        <Show when={!s().pendingCommand && !s().pendingInteraction}>
+        {!s().pendingCommand && !s().pendingInteraction ? (
           <box flexShrink={0} paddingX={2} paddingY={1} alignItems="center">
             <Prompt
               model={s().model}
@@ -188,10 +184,10 @@ export function SessionRoute(props: SessionRouteProps) {
               registerFocus={(fn) => props.bridge.registerPromptFocus(fn)}
             />
           </box>
-        </Show>
+        ) : null}
       </box>
 
-      <Show when={wide()}>
+      {wide() ? (
         <Sidebar
           workdir={props.bridge.workdir}
           sessionId={s().currentSessionId}
@@ -200,7 +196,7 @@ export function SessionRoute(props: SessionRouteProps) {
           skillsCount={s().skillOptions.length}
           contextUsage={s().contextUsage}
         />
-      </Show>
+      ) : null}
     </box>
   );
 }

@@ -1,19 +1,16 @@
-import { Show } from "solid-js";
+import { createSignal, onMount } from "solid-js";
 import type { CliRenderer, InputRenderable } from "@opentui/core";
 import { DialogOverlay } from "../ui/dialog.js";
 import { DialogSelect, type DialogSelectItem } from "../ui/dialog-select.js";
 import type { SessionBridge } from "../session-bridge.js";
 import { ALL_MODELS, modelRef, PROVIDER_LABELS } from "../../config/models.js";
-import { hasProviderAuth } from "../../providers/registry.js";
+import { hasProviderAuth, PROVIDER_ENV_VARS } from "../../providers/registry.js";
 import { SessionManager } from "../../session/manager.js";
-import type { Model } from "../../providers/types.js";
-import type { ProviderId } from "../../providers/types.js";
+import type { Model, ProviderId } from "../../providers/types.js";
 import { getCompactionSettings, DEFAULT_COMPACTION_SETTINGS } from "../../config/settings.js";
 import type { ThinkingLevel } from "../../providers/types.js";
 import { discoverSkills } from "../../agent/skills.js";
-import { createSignal, onMount } from "solid-js";
 import { useTheme } from "../theme/provider.js";
-import { PROVIDER_ENV_VARS } from "../../providers/registry.js";
 import { useOverlayKeys } from "../utils/use-overlay-keys.js";
 
 interface DialogsProps {
@@ -124,7 +121,7 @@ export function Dialogs(props: DialogsProps) {
 
   return (
     <>
-      <Show when={dialog() === "model"}>
+      {dialog() === "model" ? (
         <DialogOverlay open onClose={() => props.bridge.patch({ dialog: "none", modelFilter: undefined })}>
           <DialogSelect
             title="/model"
@@ -135,9 +132,9 @@ export function Dialogs(props: DialogsProps) {
             onClose={() => props.bridge.patch({ dialog: "none", modelFilter: undefined })}
           />
         </DialogOverlay>
-      </Show>
+      ) : null}
 
-      <Show when={dialog() === "sessions"}>
+      {dialog() === "sessions" ? (
         <DialogOverlay open onClose={() => props.bridge.patch({ dialog: "none" })}>
           <DialogSelect
             title="/sessions"
@@ -149,9 +146,9 @@ export function Dialogs(props: DialogsProps) {
             onClose={() => props.bridge.patch({ dialog: "none" })}
           />
         </DialogOverlay>
-      </Show>
+      ) : null}
 
-      <Show when={dialog() === "settings"}>
+      {dialog() === "settings" ? (
         <DialogOverlay open onClose={() => props.bridge.patch({ dialog: "none" })}>
           <DialogSelect
             title="/settings"
@@ -160,9 +157,9 @@ export function Dialogs(props: DialogsProps) {
             onClose={() => props.bridge.patch({ dialog: "none" })}
           />
         </DialogOverlay>
-      </Show>
+      ) : null}
 
-      <Show when={dialog() === "skills"}>
+      {dialog() === "skills" ? (
         <DialogOverlay open onClose={() => props.bridge.patch({ dialog: "none" })}>
           <DialogSelect
             title="/skills"
@@ -172,15 +169,15 @@ export function Dialogs(props: DialogsProps) {
             onClose={() => props.bridge.patch({ dialog: "none" })}
           />
         </DialogOverlay>
-      </Show>
+      ) : null}
 
-      <Show when={dialog() === "connect"}>
+      {dialog() === "connect" ? (
         <ConnectDialog bridge={props.bridge} renderer={props.renderer} />
-      </Show>
+      ) : null}
 
-      <Show when={dialog() === "apiKey" && s().pendingModel}>
+      {dialog() === "apiKey" && s().pendingModel ? (
         <ApiKeyDialog bridge={props.bridge} renderer={props.renderer} />
-      </Show>
+      ) : null}
     </>
   );
 }

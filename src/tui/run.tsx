@@ -1,4 +1,4 @@
-import { Show, onMount } from "solid-js";
+import { onMount } from "solid-js";
 import { createCliRenderer, type CliRenderer } from "@opentui/core";
 import { ThemeProvider } from "./theme/provider.js";
 import { HomeRoute } from "./routes/home.js";
@@ -60,12 +60,12 @@ function TuiRoot(props: {
   return (
     <ThemeProvider>
       <box width="100%" height="100%" minHeight={0}>
-        <Show when={route() === "home"}>
+        {route() === "home" ? (
           <HomeRoute bridge={props.bridge} renderer={props.renderer} onSubmit={submit} onQuit={props.onQuit} />
-        </Show>
-        <Show when={route() === "session"}>
+        ) : null}
+        {route() === "session" ? (
           <SessionRoute bridge={props.bridge} renderer={props.renderer} onSubmit={submit} />
-        </Show>
+        ) : null}
         <Dialogs bridge={props.bridge} renderer={props.renderer} />
         <CommandPalette
           open={dialog() === "palette"}

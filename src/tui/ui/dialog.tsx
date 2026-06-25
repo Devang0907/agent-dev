@@ -1,4 +1,4 @@
-import { Show, type ParentProps } from "solid-js";
+import type { ParentProps } from "solid-js";
 import { useTheme } from "../theme/provider.js";
 
 interface DialogOverlayProps extends ParentProps {
@@ -8,35 +8,33 @@ interface DialogOverlayProps extends ParentProps {
 
 export function DialogOverlay(props: DialogOverlayProps) {
   const theme = useTheme();
-  return (
-    <Show when={props.open}>
+  return props.open ? (
+    <box
+      position="absolute"
+      top={0}
+      left={0}
+      width="100%"
+      height="100%"
+      backgroundColor={theme.dialogScrim}
+      zIndex={3000}
+      justifyContent="center"
+      alignItems="center"
+      onMouseDown={(e) => {
+        e.stopPropagation();
+      }}
+    >
       <box
-        position="absolute"
-        top={0}
-        left={0}
-        width="100%"
-        height="100%"
-        backgroundColor={theme.dialogScrim}
-        zIndex={3000}
-        justifyContent="center"
-        alignItems="center"
-        onMouseDown={(e) => {
-          e.stopPropagation();
-        }}
+        flexDirection="column"
+        borderStyle="rounded"
+        borderColor={theme.borderActive}
+        backgroundColor={theme.backgroundPanel}
+        paddingX={2}
+        paddingY={1}
+        width={88}
+        maxHeight="80%"
       >
-        <box
-          flexDirection="column"
-          borderStyle="rounded"
-          borderColor={theme.borderActive}
-          backgroundColor={theme.backgroundPanel}
-          paddingX={2}
-          paddingY={1}
-          width={88}
-          maxHeight="80%"
-        >
-          {props.children}
-        </box>
+        {props.children}
       </box>
-    </Show>
-  );
+    </box>
+  ) : null;
 }

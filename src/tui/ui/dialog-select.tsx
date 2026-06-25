@@ -1,4 +1,4 @@
-import { Show, createEffect, createMemo, createSignal } from "solid-js";
+import { createEffect, createMemo, createSignal } from "solid-js";
 import type { SelectRenderable } from "@opentui/core";
 import { useTheme } from "../theme/provider.js";
 import { DIALOG_LIST_VISIBLE_ROWS } from "../utils/scroll.js";
@@ -110,23 +110,19 @@ export function DialogSelect(props: DialogSelectProps) {
         </text>
         <text fg={theme.textMuted}>esc close</text>
       </box>
-      <Show when={!props.filter}>
+      {!props.filter ? (
         <box flexDirection="row">
           <text fg={theme.textMuted}>filter: </text>
           <text fg={theme.text}>{filterText() || "…"}</text>
         </box>
-      </Show>
-      <Show when={props.filter}>
+      ) : (
         <box flexDirection="row">
           <text fg={theme.textMuted}>filter: </text>
           <text fg={theme.text}>{props.filter}</text>
         </box>
-      </Show>
+      )}
       <box marginTop={1}>
-        <Show
-          when={selectOptions().length > 0}
-          fallback={<text fg={theme.textMuted}>No matches.</text>}
-        >
+        {selectOptions().length > 0 ? (
           <select
             ref={(el) => {
               selectRef = el;
@@ -147,15 +143,15 @@ export function DialogSelect(props: DialogSelectProps) {
               if (opt?.value) props.onSelect(opt.value as DialogSelectItem);
             }}
           />
-        </Show>
+        ) : (
+          <text fg={theme.textMuted}>No matches.</text>
+        )}
       </box>
       <text fg={theme.textMuted} marginTop={1}>
         ↑↓ navigate · Enter select
         {filtered().length > 0 ? ` · ${safeIndex() + 1}/${filtered().length}` : " "}
       </text>
-      <Show when={props.hint}>
-        <text fg={theme.textMuted}>{props.hint}</text>
-      </Show>
+      {props.hint ? <text fg={theme.textMuted}>{props.hint}</text> : null}
     </box>
   );
 }

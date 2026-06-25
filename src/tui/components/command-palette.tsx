@@ -1,4 +1,4 @@
-import { Show, createEffect, createMemo, createSignal, onCleanup } from "solid-js";
+import { createEffect, createMemo, createSignal, onCleanup } from "solid-js";
 import type { SelectRenderable } from "@opentui/core";
 import { useTheme } from "../theme/provider.js";
 import type { CommandEntry } from "../commands/registry.js";
@@ -84,9 +84,8 @@ export function CommandPalette(props: CommandPaletteProps) {
   const visibleRows = DIALOG_LIST_VISIBLE_ROWS;
   const safeIndex = () => Math.min(selectedIndex(), Math.max(0, filtered().length - 1));
 
-  return (
-    <Show when={props.open}>
-      <box
+  return props.open ? (
+    <box
         position="absolute"
         top={0}
         left={0}
@@ -139,6 +138,5 @@ export function CommandPalette(props: CommandPaletteProps) {
           </box>
         </box>
       </box>
-    </Show>
-  );
+  ) : null;
 }
