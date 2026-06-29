@@ -39,4 +39,24 @@ describe("AgentSession", () => {
     expect(loadPlanSummary(oldId)).toContain("Old");
     ws.cleanup();
   });
+
+  it("waitForIdle returns immediately when idle", async () => {
+    const ws = createTmpWorkspace();
+    const session = new AgentSession(sampleSettings(), new SessionManager(undefined, ws.path), ws.path);
+    await expect(session.waitForIdle()).resolves.toBe(true);
+    ws.cleanup();
+  });
+
+  it("forceNewSession clears messages when idle", async () => {
+    const ws = createTmpWorkspace();
+    const mgr = new SessionManager(undefined, ws.path);
+    mgr.appendMessage({ role: "user", content: "hello" });
+    const session = new AgentSession(sampleSettings(), mgr, ws.path);
+    const oldId = session.getSessionId();
+    expect(session.getMessages()).toHaveLength(1);
+    await expect(session.forceNewSession()).resolves.toBe(true);
+    expect(session.getMessages()).toHaveLength(0);
+    expect(session.getSessionId()).not.toBe(oldId);
+    ws.cleanup();
+  });
 });

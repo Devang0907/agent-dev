@@ -192,15 +192,20 @@ export async function runTelegramGateway(cliOptions: TelegramGatewayOptions & { 
     logUserCommand(userId, "/new");
 
     const bridge = getOrCreateBridge(chatId);
-    if (bridge.session.isRunning()) {
-      await sendBusyReply(ctx);
+    const wasRunning = bridge.session.isRunning();
+    const ok = await bridge.startNewSession();
+    if (!ok) {
+      await ctx.reply("Could not stop the current turn in time. Try /new again.");
       return;
     }
 
-    bridge.session.newSession();
     setSessionIdForChat(chatId, bridge.session.getSessionId());
     logGateway("New session started");
-    await ctx.reply("Started a new session.");
+    await ctx.reply(
+      wasRunning
+        ? "Stopped the previous turn and started a new session."
+        : "Started a new session.",
+    );
   });
 
   bot.command("status", async (ctx) => {

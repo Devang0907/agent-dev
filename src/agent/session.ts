@@ -317,6 +317,15 @@ export class AgentSession extends EventEmitter {
     stopBackgroundProcesses();
   }
 
+  async waitForIdle(timeoutMs = 30_000): Promise<boolean> {
+    if (!this.running) return true;
+    const deadline = Date.now() + timeoutMs;
+    while (this.running && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    return !this.running;
+  }
+
   respondToPermission(approved: boolean): void {
     this.resolvePermission(approved);
   }
@@ -452,6 +461,19 @@ export class AgentSession extends EventEmitter {
 
   newSession(): void {
     if (this.running) return;
+    this.resetSessionState();
+  }
+
+  async forceNewSession(): Promise<boolean> {
+    if (this.running) {
+      this.abort();
+      if (!(await this.waitForIdle())) return false;
+    }
+    this.resetSessionState();
+    return true;
+  }
+
+  private resetSessionState(): void {
     stopBackgroundProcesses();
     this.messages = [];
     this.sessionManager = new SessionManager(undefined, this.workdir);

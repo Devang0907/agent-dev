@@ -74,6 +74,7 @@ export class TelegramSessionBridge {
   private approvalCounter = 0;
   private interactionCounter = 0;
   private agentLineStarted = false;
+  private promptGeneration = 0;
   private readonly promptQueue = new PromptQueue();
 
   constructor(
@@ -218,6 +219,21 @@ export class TelegramSessionBridge {
     this.promptQueue.clear();
   }
 
+  prepareForNewSession(): void {
+    this.promptGeneration++;
+    this.clearQueue();
+    this.textBuffer = "";
+    this.agentLineStarted = false;
+    this.pendingApprovalId = undefined;
+    this.pendingInteractionId = undefined;
+    this.activeWorker = null;
+  }
+
+  async startNewSession(): Promise<boolean> {
+    this.prepareForNewSession();
+    return this.session.forceNewSession();
+  }
+
   private async drainQueue(): Promise<void> {
     const next = this.promptQueue.take();
     if (!next) return;
@@ -313,12 +329,14 @@ export class TelegramSessionBridge {
   }
 
   async prompt(text: string, userId?: number): Promise<void> {
+    const generation = ++this.promptGeneration;
     this.textBuffer = "";
     this.agentLineStarted = false;
     setScheduleContext({ chatId: this.chatId, userId });
     try {
       await this.api.sendChatAction(this.chatId, "typing");
       await this.session.prompt(text);
+      if (generation !== this.promptGeneration) return;
       await this.flushTextBuffer();
     } finally {
       setScheduleContext(null);

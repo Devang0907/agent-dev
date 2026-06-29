@@ -31,7 +31,7 @@ export function formatWelcomeMessage(options: {
     "/model — list or switch model (e.g. /model anthropic/claude-sonnet-4-6)",
     "/status — model, workdir, session, busy/idle",
     "/compact — summarize older messages to free context",
-    "/new — start a fresh session",
+    "/new — start a fresh session (stops the current turn if busy)",
     "/stop — abort the current turn",
     "/schedules — list active reminders and daily tasks",
     "/help — show this guide again",
