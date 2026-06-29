@@ -1,0 +1,7 @@
+{
+  "name": "mini-dev",
+  "private": true,
+  "scripts": {
+    "dev": "node -e \"const http=require('http');http.createServer((q,r)=>r.end('ok')).listen(3000,()=>console.log('ready on http://localhost:3000'))\""
+  }
+}
