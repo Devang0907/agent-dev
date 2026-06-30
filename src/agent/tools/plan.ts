@@ -240,3 +240,15 @@ export function loadPlanSummary(sessionId?: string): string {
   if (!plan || plan.tasks.length === 0) return "";
   return formatPlan(plan);
 }
+
+export function buildPlanExecutionPrompt(summary: string): string {
+  return [
+    "Execute the active plan now in Build mode.",
+    "",
+    "Plan:",
+    summary,
+    "",
+    "Follow the plan step by step and implement code changes directly.",
+    "After implementation, run relevant verification and report what was completed.",
+  ].join("\n");
+}

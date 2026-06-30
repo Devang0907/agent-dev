@@ -18,6 +18,32 @@ describe("AgentSession", () => {
     ws.cleanup();
   });
 
+  it("switchToAgentMode disables boss orchestrator", () => {
+    const ws = createTmpWorkspace();
+    const session = new AgentSession(
+      sampleSettings({ orchestratorMode: "boss" }),
+      new SessionManager(undefined, ws.path),
+      ws.path,
+    );
+    session.switchToAgentMode("plan");
+    expect(session.getOrchestratorMode()).toBe("off");
+    expect(session.getAgentMode()).toBe("plan");
+    ws.cleanup();
+  });
+
+  it("switchToAgentMode disables boss even when agent mode unchanged", () => {
+    const ws = createTmpWorkspace();
+    const session = new AgentSession(
+      sampleSettings({ orchestratorMode: "boss", agentMode: "build" }),
+      new SessionManager(undefined, ws.path),
+      ws.path,
+    );
+    session.switchToAgentMode("build");
+    expect(session.getOrchestratorMode()).toBe("off");
+    expect(session.getAgentMode()).toBe("build");
+    ws.cleanup();
+  });
+
   it("newSession clears messages", () => {
     const ws = createTmpWorkspace();
     const mgr = new SessionManager(undefined, ws.path);

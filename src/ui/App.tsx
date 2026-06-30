@@ -35,7 +35,12 @@ import { useMouseScroll } from "./useMouseScroll.js";
 import { WHEEL_SCROLL_LINES } from "./mouse.js";
 import { SkillsView } from "./SkillsView.js";
 import { discoverSkills } from "../agent/skills.js";
-import { loadPlanSummary, clearPlan, clearLegacyGlobalPlan } from "../agent/tools/plan.js";
+import {
+  loadPlanSummary,
+  clearPlan,
+  clearLegacyGlobalPlan,
+  buildPlanExecutionPrompt,
+} from "../agent/tools/plan.js";
 import type { AgentMode } from "../agent/mode.js";
 import type { OrchestratorMode } from "../config/settings.js";
 import { useAppInput } from "./useAppInput.js";
@@ -123,6 +128,7 @@ export function App({ session, workdir, onQuit }: AppProps) {
   const startupChecked = useRef(false);
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [contextUsage, setContextUsage] = useState<ContextUsageState>(() => session.getContextUsage());
+  const [pendingPlanExecutionSummary, setPendingPlanExecutionSummary] = useState<string | null>(null);
 
   const theme = getTheme();
 
@@ -261,6 +267,23 @@ export function App({ session, workdir, onQuit }: AppProps) {
             ...prev,
             toDisplayMessage("tool", formatToolForDisplay(event.name, event.result), event.name),
           ]);
+          if (
+            event.name === "plan" &&
+            event.result.includes("Plan created.") &&
+            session.getAgentMode() === "plan"
+          ) {
+            const summary = loadPlanSummary(session.getSessionId());
+            if (summary) {
+              setPendingPlanExecutionSummary(summary);
+              setDisplayMessages((prev) => [
+                ...prev,
+                toDisplayMessage(
+                  "assistant",
+                  "Plan created. Do you want me to execute it now?\n\nOptions: yes / no",
+                ),
+              ]);
+            }
+          }
           break;
         case "delegation_start":
           setDisplayMessages((prev) => [
@@ -466,8 +489,32 @@ export function App({ session, workdir, onQuit }: AppProps) {
         setDisplayMessages([]);
         setStreamingText("");
         setScrollOffset(null);
+        setPendingPlanExecutionSummary(null);
         setCurrentSessionId(session.getSessionId());
         return;
+      }
+      if (pendingPlanExecutionSummary) {
+        const answer = value.trim().toLowerCase();
+        if (answer === "yes" || answer === "y") {
+          session.switchToAgentMode("build");
+          setPendingPlanExecutionSummary(null);
+          setDisplayMessages((prev) => [
+            ...prev,
+            toDisplayMessage("user", value),
+            toDisplayMessage("assistant", "Approved. Switched to Build mode and starting implementation."),
+          ]);
+          await session.prompt(buildPlanExecutionPrompt(pendingPlanExecutionSummary));
+          return;
+        }
+        if (answer === "no" || answer === "n") {
+          setPendingPlanExecutionSummary(null);
+          setDisplayMessages((prev) => [
+            ...prev,
+            toDisplayMessage("user", value),
+            toDisplayMessage("assistant", "Okay, staying in Plan mode."),
+          ]);
+          return;
+        }
       }
       if (value === "/sessions") {
         setOverlay("sessions");
@@ -482,11 +529,11 @@ export function App({ session, workdir, onQuit }: AppProps) {
         return;
       }
       if (value === "/build") {
-        session.setAgentMode("build");
+        session.switchToAgentMode("build");
         return;
       }
       if (value === "/plan") {
-        session.setAgentMode("plan");
+        session.switchToAgentMode("plan");
         return;
       }
       if (value === "/boss") {
@@ -592,7 +639,17 @@ export function App({ session, workdir, onQuit }: AppProps) {
 
       await session.prompt(value);
     },
-    [session, running, onQuit, exit, model, settings, openApiKeyPrompt, workdir],
+    [
+      session,
+      running,
+      onQuit,
+      exit,
+      model,
+      settings,
+      openApiKeyPrompt,
+      workdir,
+      pendingPlanExecutionSummary,
+    ],
   );
 
   const skillOptions = useMemo(

@@ -179,12 +179,20 @@ export class AgentSession extends EventEmitter {
     this.emit("event", { type: "agent_mode_changed", mode } satisfies SessionEvent);
   }
 
+  /** Switch build/plan and leave boss orchestrator if it was active. */
+  switchToAgentMode(mode: AgentMode): void {
+    if (this.getOrchestratorMode() === "boss") {
+      this.setOrchestratorMode("off");
+    }
+    this.setAgentMode(mode);
+  }
+
   cycleAgentMode(direction: 1 | -1 = 1): AgentMode {
     const modes: AgentMode[] = ["build", "plan"];
     const current = this.getAgentMode();
     const idx = modes.indexOf(current);
     const next = modes[(idx + direction + modes.length) % modes.length]!;
-    this.setAgentMode(next);
+    this.switchToAgentMode(next);
     return next;
   }
 

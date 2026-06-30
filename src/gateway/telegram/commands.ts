@@ -13,9 +13,12 @@ export function formatModeStatus(session: AgentSession): string {
 }
 
 export function applyAgentMode(session: AgentSession, mode: AgentMode): string {
-  session.setAgentMode(mode);
-  logGateway(`Agent mode → ${mode}`);
-  return `Switched to **${mode}** mode.`;
+  const wasBoss = session.getOrchestratorMode() === "boss";
+  session.switchToAgentMode(mode);
+  logGateway(`Agent mode → ${mode}${wasBoss ? " (boss off)" : ""}`);
+  return wasBoss
+    ? `Boss orchestrator **disabled**. Switched to **${mode}** mode.`
+    : `Switched to **${mode}** mode.`;
 }
 
 export function applyBossMode(session: AgentSession, mode: OrchestratorMode): string {
