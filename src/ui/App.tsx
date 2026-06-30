@@ -275,13 +275,6 @@ export function App({ session, workdir, onQuit }: AppProps) {
             const summary = loadPlanSummary(session.getSessionId());
             if (summary) {
               setPendingPlanExecutionSummary(summary);
-              setDisplayMessages((prev) => [
-                ...prev,
-                toDisplayMessage(
-                  "assistant",
-                  "Plan created. Do you want me to execute it now?\n\nOptions: yes / no",
-                ),
-              ]);
             }
           }
           break;
@@ -345,6 +338,15 @@ export function App({ session, workdir, onQuit }: AppProps) {
               }
               return [...prev, toDisplayMessage("assistant", final)];
             });
+          }
+          if (pendingPlanExecutionSummary) {
+            setDisplayMessages((prev) => [
+              ...prev,
+              toDisplayMessage(
+                "assistant",
+                "Plan created. Do you want me to execute it now?\n\nOptions: yes / no",
+              ),
+            ]);
           }
           streamingRef.current = "";
           setStreamingText("");
@@ -420,7 +422,7 @@ export function App({ session, workdir, onQuit }: AppProps) {
     return () => {
       session.off("event", handler);
     };
-  }, [session, model, openApiKeyPrompt, followLatest]);
+  }, [session, model, openApiKeyPrompt, followLatest, pendingPlanExecutionSummary]);
 
   useMouseScroll(
     (direction) => {
