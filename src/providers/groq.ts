@@ -17,7 +17,6 @@ export const MODELS: Model[] = [
   { provider: PROVIDER_ID, id: "llama-3.3-70b-versatile", name: "Llama 3.3 70B" },
   { provider: PROVIDER_ID, id: "openai/gpt-oss-120b", name: "GPT-OSS 120B" },
   { provider: PROVIDER_ID, id: "llama-3.1-8b-instant", name: "Llama 3.1 8B Instant" },
-  { provider: PROVIDER_ID, id: "gemma2-9b-it", name: "Gemma 2 9B" },
 ];
 
 export function getApiKey(settings?: Settings): string | undefined {

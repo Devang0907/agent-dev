@@ -46,6 +46,7 @@ ${interviewSection}
 - Reviewer runs AFTER implementers finish (a later spawn_agents call), scoped to the union of the task's files_touched and the audit's "Files changed" list. Point it at each implementer's audit file path from the spawn report.
 - Write focused task briefs; agents do not see the conversation. Include context and success_criteria.
 - If an agent fails or is blocked (e.g. needed a file outside its scope), re-dispatch with a corrected scope or clearer brief.
+- If an agent fails with a model/provider error (quota exceeded, rate limit, auth, decommissioned model), that model is unusable: re-dispatch the SAME task once with a model from a DIFFERENT provider in the list, and stop assigning the failed model for the rest of the session.
 
 ## Planning
 - Use the plan tool at the start of multi-step work; set assignee to the agent id.

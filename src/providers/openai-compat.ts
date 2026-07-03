@@ -232,7 +232,25 @@ export function recoverToolCallsFromValidationError(error: string): ToolCall[] {
 
     const jsonMatch = failed.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
-      const args = parseToolArguments(jsonMatch[0]);
+      let args = parseToolArguments(jsonMatch[0]);
+      // Model output is often the full call wrapper {"name": "x", "arguments": {...}} —
+      // unwrap it so the tool receives only its arguments.
+      if (args) {
+        try {
+          const parsed = JSON.parse(args) as { name?: unknown; arguments?: unknown };
+          if (
+            typeof parsed.name === "string" &&
+            parsed.arguments !== undefined &&
+            typeof parsed.arguments === "object"
+          ) {
+            args = JSON.stringify(parsed.arguments);
+            tryPush(parsed.name, args);
+            if (results.length > 0) return results;
+          }
+        } catch {
+          // fall through to the generic path
+        }
+      }
       if (args && toolMatch) {
         tryPush(toolMatch[1]!, args);
         if (results.length > 0) return results;

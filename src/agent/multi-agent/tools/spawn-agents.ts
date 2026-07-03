@@ -102,12 +102,14 @@ function extractAgentSummary(messages: ChatMessage[]): {
 } {
   const toolsUsed: string[] = [];
   let lastAssistant = "";
-  let hasError = false;
+  // Only the final tool outcome matters: agents often recover from a failed
+  // call by retrying, and that should still count as success.
+  let lastToolErrored = false;
 
   for (const msg of messages) {
     if (msg.role === "tool") {
       if (msg.name && !toolsUsed.includes(msg.name)) toolsUsed.push(msg.name);
-      if (msg.content.startsWith("Error:")) hasError = true;
+      lastToolErrored = msg.content.startsWith("Error:");
     }
     if (msg.role === "assistant" && msg.content.trim()) {
       lastAssistant = msg.content.trim();
@@ -116,7 +118,7 @@ function extractAgentSummary(messages: ChatMessage[]): {
 
   return {
     summary: lastAssistant || "(no summary from agent)",
-    status: hasError ? "error" : "success",
+    status: lastToolErrored ? "error" : "success",
     toolsUsed,
   };
 }
@@ -286,6 +288,7 @@ export async function executeSpawnAgents(args: { tasks: SpawnTaskArgs[] }): Prom
     const toolsUsed: string[] = [];
     let status: "success" | "error" | "aborted" = "success";
     let summary = "";
+    let fatalError: string | null = null;
 
     try {
       const newMessages = await loopRunner({
@@ -311,6 +314,11 @@ export async function executeSpawnAgents(args: { tasks: SpawnTaskArgs[] }): Prom
           if (event.type === "tool_call" && event.toolCall.name) {
             if (!toolsUsed.includes(event.toolCall.name)) toolsUsed.push(event.toolCall.name);
           }
+          // The loop emits "error" only for fatal stream failures right before
+          // aborting the run — without this the failure is invisible here.
+          if (event.type === "error") {
+            fatalError = event.message;
+          }
           if (
             event.type === "message_start" ||
             event.type === "text_delta" ||
@@ -335,6 +343,13 @@ export async function executeSpawnAgents(args: { tasks: SpawnTaskArgs[] }): Prom
       summary = extracted.summary;
       for (const t of extracted.toolsUsed) {
         if (!toolsUsed.includes(t)) toolsUsed.push(t);
+      }
+      if (fatalError && !ctx.signal?.aborted) {
+        status = "error";
+        summary =
+          summary === "(no summary from agent)"
+            ? `Agent failed: ${fatalError}`
+            : `${summary}\n\nAgent aborted with error: ${fatalError}`;
       }
     } catch (err) {
       status = ctx.signal?.aborted ? "aborted" : "error";

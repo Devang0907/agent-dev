@@ -25,7 +25,6 @@ export const ALL_MODELS: Model[] = [
   { provider: "groq", id: "llama-3.3-70b-versatile", name: "Llama 3.3 70B", contextWindow: CTX_128K },
   { provider: "groq", id: "openai/gpt-oss-120b", name: "GPT-OSS 120B", contextWindow: CTX_128K },
   { provider: "groq", id: "llama-3.1-8b-instant", name: "Llama 3.1 8B Instant", contextWindow: CTX_32K },
-  { provider: "groq", id: "gemma2-9b-it", name: "Gemma 2 9B", contextWindow: CTX_32K },
   { provider: "gemini", id: "gemini-2.5-pro", name: "Gemini 2.5 Pro", contextWindow: CTX_200K },
   { provider: "gemini", id: "gemini-2.5-flash", name: "Gemini 2.5 Flash", contextWindow: CTX_200K },
   { provider: "gemini", id: "gemini-2.0-flash", name: "Gemini 2.0 Flash", contextWindow: CTX_200K },

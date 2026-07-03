@@ -151,8 +151,10 @@ async function runToolBatch(
   settings?: Settings,
   fileScope?: string[],
   fileWriteGuard?: (path: string) => string | null,
+  allowedTools?: string[],
 ): Promise<boolean> {
   let stopAfterBatch = false;
+  const allowedSet = allowedTools ? new Set(allowedTools) : null;
 
   for (const tc of uniqueCalls) {
     onEvent({ type: "tool_call", toolCall: tc });
@@ -161,6 +163,15 @@ async function runToolBatch(
       args = JSON.parse(tc.arguments || "{}");
     } catch {
       args = {};
+    }
+
+    // Models sometimes hallucinate tools outside their allowlist (recovered
+    // from provider validation errors) — never execute those.
+    if (allowedSet && !allowedSet.has(tc.name)) {
+      const notAllowed = `Error: tool "${tc.name}" is not available in this mode. Available tools: ${allowedTools!.join(", ")}.`;
+      onEvent({ type: "tool_result", toolCallId: tc.id, name: tc.name, result: notAllowed });
+      context.push({ role: "tool", content: notAllowed, toolCallId: tc.id, name: tc.name });
+      continue;
     }
 
     const planBlock = checkPlanModeToolBlock(agentMode, tc.name, args, workdir);
@@ -474,6 +485,7 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<ChatMessa
       settings,
       fileScope,
       fileWriteGuard,
+      allowedTools,
     );
 
     if (stopAfterBatch) {
