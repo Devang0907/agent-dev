@@ -1,6 +1,6 @@
 # agent-dev
 
-A minimal terminal coding agent with an Ink TUI. Chat with an AI that can read and edit code, search the web, run git/shell commands (with approval), use MCP servers, load skills, schedule Telegram reminders and daily tasks, and optionally delegate work through a **boss orchestrator** that coordinates specialized worker agents.
+A minimal terminal coding agent with an Ink TUI. Chat with an AI that can read and edit code, search the web, run git/shell commands (with approval), use MCP servers, load skills, schedule Telegram reminders and daily tasks, and optionally orchestrate work through a **boss orchestrator** (sequential workers) or a **multi-agent orchestrator** that runs several specialized agents **in parallel** on the same codebase. If a model hits a rate limit or quota, the agent **fails over to the next connected model automatically** instead of getting stuck.
 
 ## Quick start
 
@@ -61,6 +61,16 @@ Retired slugs like `deepseek/deepseek-r1:free` and `qwen/qwen3-235b-a22b:free` a
 
 Default provider/model: `free/meta-llama/llama-3.3-70b-instruct:free`.
 
+### Automatic model failover
+
+When a request fails because the **model or provider is unavailable** — rate limit (429), quota exhausted, Groq tokens-per-minute limit, invalid/missing API key, decommissioned model, or a provider outage — the agent does not stop. It:
+
+1. Reports what happened (`openai/gpt-4o unavailable — 429 … Switching to groq/llama-3.3-70b-versatile and retrying…`)
+2. Switches to the next **connected** model, preferring a **different provider** first (rate limits and quota are usually provider-wide), then other models on the same provider
+3. Retries the same step (up to 3 model switches per turn)
+
+If no connected model can serve the request, the error is shown to you and the turn ends cleanly — the agent never hangs. Failover applies everywhere: normal chat, Plan mode, boss workers, and multi-agent workers.
+
 ## CLI
 
 ```bash
@@ -68,6 +78,8 @@ npm run dev                                    # Interactive TUI
 npm run dev -- -p "List files in src"          # Print mode (no TUI)
 npm run dev -- --boss                          # Start in boss orchestrator mode
 npm run dev -- --boss -p "refactor auth module" # Boss mode, print and exit
+npm run dev -- --multi                         # Start in multi-agent (parallel) mode
+npm run dev -- --multi -p "add tests for utils" # Multi-agent mode, print and exit
 npm run dev -- -c                              # Continue last session
 npm run dev -- --model groq/llama-3.3-70b-versatile "hello"
 npm run build && npm start                     # Production build
@@ -81,6 +93,7 @@ npm run test:coverage                          # Coverage report
 | `-p`, `--print` | Print response and exit |
 | `-c`, `--continue` | Resume the most recent session |
 | `--boss` | Enable boss orchestrator mode |
+| `--multi` | Enable multi-agent (parallel) orchestrator mode |
 | `--model <ref>` | Provider/model (e.g. `openai/gpt-4o`) |
 | `-h`, `--help` | Show help |
 
@@ -212,6 +225,8 @@ While the agent is busy, Telegram accepts **one queued follow-up message** per c
 | `/build` | Switch to Build mode (full tool access) |
 | `/plan` | Switch to Plan mode (read-only exploration) |
 | `/boss` | Toggle boss orchestrator mode |
+| `/multi` | Toggle multi-agent (parallel) orchestrator mode |
+| `/agents` | List agent runs from the current multi-agent session |
 | `/tasks` | Show the active task plan |
 | `/compact [instructions]` | Summarize older messages to free context (optional focus) |
 | `/rules` | List loaded project rule files (`AGENTS.md`, etc.) |
@@ -368,9 +383,65 @@ The boss only has `plan` and `delegate` tools — it does not edit files or run 
 
 Boss mode uses the same model you select in `/model`. Workers run in isolated contexts with scoped task briefs.
 
+### Multi-agent orchestrator (opt-in, parallel)
+
+Multi-agent mode runs **several specialized agents concurrently** on the same codebase without conflicts. A boss agent interviews you, decomposes the goal, assigns a model to each agent, and dispatches them in parallel batches.
+
+Enable with `--multi` or `/multi`. The footer shows **MULTI** in blue when active. Boss and multi modes are independent — toggling one turns off the other.
+
+```
+User → Multi boss (plan + spawn_agents + ask_user)
+         ├─ scout        (read-only recon, fast model)      ┐
+         ├─ implementer  (code changes, capable model)      ├─ run in PARALLEL
+         └─ reviewer     (verifies results, capable model)  ┘
+```
+
+| Agent | Role | Tools |
+|-------|------|-------|
+| `scout` | Read-only exploration and recon | read, list_dir, grep, git, docs |
+| `implementer` | Focused code changes + audit file | read, list_dir, grep, write, edit, diff, verify |
+| `reviewer` | Verifies implementer output against criteria | read, list_dir, grep, diff, verify, bash |
+
+**First-prompt interview** — on the first message of a multi session, the boss asks:
+
+1. *How many agents should I spawn?* (with a suggested count)
+2. *Here is my proposed team (task + model per agent) — customize or `skip` to accept*
+
+Answer with your own counts/models or just `skip`. On later prompts the boss dispatches directly.
+
+**Model assignment** — the boss only assigns models that are **connected** (API key present). You can pin models per agent during the interview (e.g. `groq/llama-3.1-8b-instant` for scouting, a large model for implementation); otherwise the boss picks by effort level (small/fast for low-effort work, large/capable for implementation and review). If an assigned model fails (rate limit, quota, dead model), the failure is reported and the boss re-dispatches on another connected model.
+
+**No write conflicts** — every writing agent must declare `files_touched` (its exact file scope). Scopes must be **disjoint**; overlapping scopes are rejected and writes outside a declared scope are blocked, so parallel agents never clobber each other. Implementers also write an audit file to `.agent-dev/multi-agent/<runId>-audit.md` describing what changed.
+
+**Live monitoring** — an **Agents panel** above the input shows each run (agent, model, status, last tool, elapsed time), and each agent's log lines are prefixed and colored (e.g. `[implementer#a20c6fef]`). Use `/agents` to list runs.
+
+**Custom teams (`multi_agents.md`)** — define your own workflow in a `multi_agents.md` file at the project root. When you enter `/multi` and the file exists, you're asked whether to use it (skipping the interview). Format — one frontmatter block per agent, body becomes the system prompt:
+
+```markdown
+---
+name: tester
+description: Writes and runs unit tests
+effort: low
+tools: read, grep, write, verify
+---
+You are the tester agent. Write focused unit tests for the assigned module and run them.
+
+---
+name: builder
+description: Implements features
+effort: high
+tools: read, grep, write, edit, diff, verify
+---
+You are the builder agent. Make the assigned code changes and verify them.
+```
+
+`tools` accepts common aliases (`glob`/`ls` → `list_dir`, `shell` → `bash`, `test` → `verify`, `search` → `web_search`). `effort` is `low` | `medium` | `high` (drives default model selection). Omitted fields get sensible defaults.
+
+Parallelism is capped by `multiAgent.maxParallel` in settings (default 3); total spawns per turn by `AGENT_MAX_SPAWNS` (default 12).
+
 ## Tools
 
-The agent has **20 built-in tools** (`delegate` is boss-only; 19 are available in normal mode):
+The agent has **22 built-in tools** (`delegate` is boss-only; `spawn_agents` and `ask_user` are multi-agent-only; 19 are available in normal mode):
 
 | Tool | Description |
 |------|-------------|
@@ -388,6 +459,8 @@ The agent has **20 built-in tools** (`delegate` is boss-only; 19 are available i
 | `memory` | Store/recall long-term facts in `~/.agent-dev/memory.json` |
 | `plan` | Create and track multi-step task plans (supports assignee, parent task, run id) |
 | `delegate` | **Boss only** — spawn a worker agent for a focused subtask |
+| `spawn_agents` | **Multi only** — dispatch multiple agents that run in parallel with disjoint file scopes |
+| `ask_user` | **Multi only** — boss asks you a question (interview, clarifications) |
 | `database` | Run SQL on SQLite files (mutations need approval) |
 | `verify` | Auto-run tests/build from `package.json` scripts |
 | `mcp` | Call tools from MCP servers (see below) |
@@ -532,11 +605,14 @@ Example `settings.json`:
   },
   "projectRules": {
     "enabled": true
+  },
+  "multiAgent": {
+    "maxParallel": 3
   }
 }
 ```
 
-Set `orchestratorMode` to `"boss"` to enable boss mode by default.
+Set `orchestratorMode` to `"boss"` or `"multi"` to enable an orchestrator mode by default. `multiAgent.maxParallel` caps how many agents run concurrently in multi-agent mode.
 
 **Thinking level** (`thinkingLevel` in settings or `/settings`) enables extended reasoning on supported models: Claude Sonnet/Opus 4+, OpenAI o3/o4-mini, and Gemini 2.5+. Other providers ignore it.
 
@@ -552,6 +628,7 @@ Set `orchestratorMode` to `"boss"` to enable boss mode by default.
 | `AGENT_DEV_DIR` | Config directory (default `~/.agent-dev`) |
 | `AGENT_MAX_TOOL_ROUNDS` | Max tool-call rounds per turn (default `50`) |
 | `AGENT_MAX_DELEGATIONS` | Max worker delegations per boss turn (default `10`) |
+| `AGENT_MAX_SPAWNS` | Max agents spawned per multi-agent turn (default `12`) |
 | `AGENT_COMPACTION_ENABLED` | `0`/`false` to disable auto-compaction |
 | `AGENT_COMPACTION_RESERVE_TOKENS` | Tokens reserved for model response (default `16384`) |
 | `AGENT_NO_PROJECT_RULES` | `1` to disable project rules injection |
@@ -564,12 +641,16 @@ agent-dev is a single-agent **ReAct loop** — no LangGraph or external agent fr
 
 Boss mode nests additional `runAgentLoop` instances inside the `delegate` tool, following the [orchestrator-workers](https://www.anthropic.com/engineering/building-effective-agents) pattern: the boss dynamically decomposes tasks and delegates to workers with isolated context.
 
+Multi-agent mode runs those nested loops **concurrently** inside `spawn_agents` (bounded parallelism), with a per-turn **file claim registry** enforcing disjoint write scopes and serialized approval/interaction prompts so parallel agents never fight over your terminal.
+
 ```
 src/
 ├── agent/
-│   ├── loop.ts              # Core ReAct loop
-│   ├── session.ts           # Session state, events, boss routing
+│   ├── loop.ts              # Core ReAct loop (+ model failover)
+│   ├── model-failover.ts    # Rate-limit/quota detection, fallback model picker
+│   ├── session.ts           # Session state, events, boss/multi routing
 │   ├── orchestrator/        # Boss prompt, workers, traces
+│   ├── multi-agent/         # Parallel agents, file claims, model assignment, multi_agents.md
 │   └── tools/               # Built-in tool implementations
 ├── gateway/
 │   ├── telegram/            # Telegram bot daemon (grammY)
