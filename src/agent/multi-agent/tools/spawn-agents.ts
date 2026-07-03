@@ -314,10 +314,13 @@ export async function executeSpawnAgents(args: { tasks: SpawnTaskArgs[] }): Prom
           if (event.type === "tool_call" && event.toolCall.name) {
             if (!toolsUsed.includes(event.toolCall.name)) toolsUsed.push(event.toolCall.name);
           }
-          // The loop emits "error" only for fatal stream failures right before
-          // aborting the run — without this the failure is invisible here.
+          // An "error" event is fatal only when the loop stops right after it.
+          // If the loop recovers (e.g. model failover), a new round begins and
+          // we clear the recorded error.
           if (event.type === "error") {
             fatalError = event.message;
+          } else if (event.type === "message_start" || event.type === "turn_end") {
+            fatalError = null;
           }
           if (
             event.type === "message_start" ||

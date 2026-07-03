@@ -20,6 +20,8 @@ import {
 } from "./system-prompt.js";
 import { isContextOverflowError } from "./compaction/tokens.js";
 import { checkFileScopeBlock } from "./multi-agent/file-claims.js";
+import { isModelUnavailableError, pickFallbackModel, MAX_MODEL_FAILOVERS } from "./model-failover.js";
+import { modelRef } from "../config/models.js";
 
 export interface InteractionRequest {
   toolCallId: string;
@@ -383,13 +385,19 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<ChatMessa
   let overflowRetried = false;
   setSkillContext({ workdir, settings });
   try {
-  let effectivePrompt = systemPromptForModel(
-    model,
-    buildSystemPrompt(workdir, { ...settings, agentMode }, systemPrompt, sessionId),
-  );
-  if (modeSwitchNote) {
-    effectivePrompt += `\n\n${modeSwitchNote}`;
-  }
+  const buildPrompt = (m: Model): string => {
+    let prompt = systemPromptForModel(
+      m,
+      buildSystemPrompt(workdir, { ...settings, agentMode }, systemPrompt, sessionId),
+    );
+    if (modeSwitchNote) {
+      prompt += `\n\n${modeSwitchNote}`;
+    }
+    return prompt;
+  };
+  let activeModel = model;
+  const failedModelRefs = new Set<string>();
+  let effectivePrompt = buildPrompt(activeModel);
   let toolRound = 0;
   let malformedToolRetry = false;
 
@@ -405,7 +413,7 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<ChatMessa
     onEvent({ type: "message_start", role: "assistant" });
 
     const { content, toolCalls, error, usage } = await collectStream(
-      model,
+      activeModel,
       context,
       settings,
       effectivePrompt,
@@ -432,6 +440,28 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<ChatMessa
         overflowRetried = true;
         const recovered = await onContextOverflow();
         if (recovered) {
+          toolRound--;
+          continue;
+        }
+      }
+      // Model/provider unavailable (rate limit, quota, auth, dead model):
+      // fail over to another connected model instead of dying. Skipped when
+      // partial text already streamed, to avoid duplicating output.
+      if (
+        isModelUnavailableError(error) &&
+        !content.trim() &&
+        failedModelRefs.size < MAX_MODEL_FAILOVERS
+      ) {
+        failedModelRefs.add(modelRef(activeModel));
+        const fallback = pickFallbackModel(activeModel, failedModelRefs, settings);
+        if (fallback) {
+          const reason = sanitizeErrorForUser(error) ?? "provider error";
+          onEvent({
+            type: "error",
+            message: `${modelRef(activeModel)} unavailable — ${reason}\nSwitching to ${modelRef(fallback)} and retrying…`,
+          });
+          activeModel = fallback;
+          effectivePrompt = buildPrompt(activeModel);
           toolRound--;
           continue;
         }

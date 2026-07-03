@@ -62,19 +62,21 @@ function extractWorkerSummary(messages: ChatMessage[]): {
 } {
   const toolsUsed: string[] = [];
   let lastAssistant = "";
-  let hasError = false;
+  // Only the final tool outcome matters: workers often recover from a failed
+  // call by retrying, and that should still count as success.
+  let lastToolErrored = false;
 
   for (const msg of messages) {
     if (msg.role === "tool") {
       if (msg.name && !toolsUsed.includes(msg.name)) toolsUsed.push(msg.name);
-      if (msg.content.startsWith("Error:")) hasError = true;
+      lastToolErrored = msg.content.startsWith("Error:");
     }
     if (msg.role === "assistant" && msg.content.trim()) {
       lastAssistant = msg.content.trim();
     }
   }
 
-  const status = hasError ? "error" : "success";
+  const status = lastToolErrored ? "error" : "success";
   return { summary: lastAssistant || "(no summary from worker)", status, toolsUsed };
 }
 
@@ -143,6 +145,7 @@ export async function executeDelegate(args: {
 
   const toolsUsed: string[] = [];
   let status: "success" | "error" | "aborted" = "success";
+  let fatalError: string | null = null;
 
   try {
     const newMessages = await runAgentLoop({
@@ -157,6 +160,14 @@ export async function executeDelegate(args: {
       onEvent: (event) => {
         if (event.type === "tool_call" && event.toolCall.name) {
           if (!toolsUsed.includes(event.toolCall.name)) toolsUsed.push(event.toolCall.name);
+        }
+        // An "error" event is fatal only when the loop stops right after it.
+        // If the loop recovers (e.g. model failover), a new round begins and
+        // we clear the recorded error.
+        if (event.type === "error") {
+          fatalError = event.message;
+        } else if (event.type === "message_start" || event.type === "turn_end") {
+          fatalError = null;
         }
         if (
           event.type === "message_start" ||
@@ -183,12 +194,19 @@ export async function executeDelegate(args: {
     });
 
     const extracted = extractWorkerSummary(newMessages);
-    status = extracted.status;
+    status = ctx.signal?.aborted ? "aborted" : extracted.status;
     for (const t of extracted.toolsUsed) {
       if (!toolsUsed.includes(t)) toolsUsed.push(t);
     }
 
-    const summary = extracted.summary;
+    let summary = extracted.summary;
+    if (fatalError && !ctx.signal?.aborted) {
+      status = "error";
+      summary =
+        summary === "(no summary from worker)"
+          ? `Worker failed: ${fatalError}`
+          : `${summary}\n\nWorker aborted with error: ${fatalError}`;
+    }
     ctx.onEvent({ type: "delegation_end", runId, workerId, status, summary });
     appendTraceEvent(ctx.sessionId, runId, {
       type: "delegation_end",
