@@ -6,7 +6,7 @@ import type { AgentMode } from "../agent/mode.js";
 import { parseAgentMode } from "../agent/mode.js";
 import { resolveFreeModelId } from "../providers/openrouter-free.js";
 
-export type OrchestratorMode = "off" | "boss";
+export type OrchestratorMode = "off" | "boss" | "multi";
 
 export interface SkillsSettings {
   enabled?: string[];
@@ -38,6 +38,11 @@ export interface ProjectRulesSettings {
   maxChars?: number;
 }
 
+export interface MultiAgentSettings {
+  /** Max worker agents running concurrently in multi mode (default 3). */
+  maxParallel?: number;
+}
+
 export type PermissionAction = "allow" | "ask" | "deny";
 export type PermissionRuleValue = PermissionAction | Record<string, PermissionAction>;
 export type PermissionRulesConfig = Partial<
@@ -57,6 +62,17 @@ export interface Settings {
   compaction?: CompactionSettings;
   projectRules?: ProjectRulesSettings;
   permissions?: PermissionRulesConfig;
+  multiAgent?: MultiAgentSettings;
+}
+
+export const DEFAULT_MULTI_AGENT_MAX_PARALLEL = 3;
+
+export function getMultiAgentMaxParallel(settings?: Settings): number {
+  const raw = settings?.multiAgent?.maxParallel;
+  if (typeof raw === "number" && Number.isFinite(raw) && raw >= 1) {
+    return Math.floor(raw);
+  }
+  return DEFAULT_MULTI_AGENT_MAX_PARALLEL;
 }
 
 export const DEFAULT_COMPACTION_SETTINGS: CompactionSettings = {
@@ -142,6 +158,7 @@ export function loadSettings(): Settings {
       compaction: parseCompactionSettings(parsed.compaction),
       projectRules: parsed.projectRules,
       permissions: parsed.permissions,
+      multiAgent: parsed.multiAgent,
     };
     if (migrated) saveSettings(settings);
     return settings;
@@ -168,7 +185,9 @@ export function setAgentMode(settings: Settings, agentMode: AgentMode): Settings
 }
 
 export function parseOrchestratorMode(value: string | undefined): OrchestratorMode {
-  return value === "boss" ? "boss" : "off";
+  if (value === "boss") return "boss";
+  if (value === "multi") return "multi";
+  return "off";
 }
 
 export function setOrchestratorMode(settings: Settings, orchestratorMode: OrchestratorMode): Settings {

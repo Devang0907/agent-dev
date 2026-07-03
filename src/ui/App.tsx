@@ -46,7 +46,9 @@ import type { OrchestratorMode } from "../config/settings.js";
 import { useAppInput } from "./useAppInput.js";
 import { isModelCommand } from "./slash-commands.js";
 import { sanitizeErrorForUser } from "../providers/openai-compat.js";
-import { getLatestTracePath } from "../agent/orchestrator/trace.js";
+import { getLatestTracePath, getTracePath } from "../agent/orchestrator/trace.js";
+import { AgentStatusPanel, type AgentRunInfo } from "./AgentStatusPanel.js";
+import { loadWorkflowAgents, loadWorkflowFile, getWorkflowFilePath, WORKFLOW_FILE_NAME } from "../agent/multi-agent/workflow-file.js";
 import { checkForUpdate, type UpdateInfo } from "../version/check.js";
 import { discoverProjectRules, formatProjectRulesSummary } from "../agent/project-rules.js";
 import { formatPermissionRulesSummary } from "../agent/permissions.js";
@@ -129,6 +131,8 @@ export function App({ session, workdir, onQuit }: AppProps) {
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [contextUsage, setContextUsage] = useState<ContextUsageState>(() => session.getContextUsage());
   const [pendingPlanExecutionSummary, setPendingPlanExecutionSummary] = useState<string | null>(null);
+  const [agentRuns, setAgentRuns] = useState<AgentRunInfo[]>([]);
+  const [pendingMultiWorkflowChoice, setPendingMultiWorkflowChoice] = useState(false);
 
   const theme = getTheme();
 
@@ -212,6 +216,8 @@ export function App({ session, workdir, onQuit }: AppProps) {
       setDisplayMessages(chatMessagesToDisplay(session.getMessages()));
       setStreamingText("");
       setScrollOffset(null);
+      setAgentRuns([]);
+      setPendingMultiWorkflowChoice(false);
       setCurrentSessionId(summary.sessionId);
       setOverlay("none");
     },
@@ -238,6 +244,7 @@ export function App({ session, workdir, onQuit }: AppProps) {
           followLatest();
           setDisplayMessages((prev) => [...prev, toDisplayMessage("user", event.content)]);
           setRunning(true);
+          setAgentRuns([]);
           streamingRef.current = "";
           setStreamingText("");
           break;
@@ -279,11 +286,21 @@ export function App({ session, workdir, onQuit }: AppProps) {
           }
           break;
         case "delegation_start":
+          setAgentRuns((prev) => [
+            ...prev.filter((r) => r.runId !== event.runId),
+            {
+              runId: event.runId,
+              agentId: event.workerId,
+              model: event.model,
+              status: "running",
+              startedAt: Date.now(),
+            },
+          ]);
           setDisplayMessages((prev) => [
             ...prev,
             toDisplayMessage(
               "tool",
-              `▶ ${event.workerId} #${event.runId}\n${event.task}`,
+              `▶ ${event.workerId} #${event.runId}${event.model ? ` (${event.model})` : ""}\n${event.task}`,
               `worker:${event.workerId}`,
             ),
           ]);
@@ -293,6 +310,13 @@ export function App({ session, workdir, onQuit }: AppProps) {
             event.status === "success" ? "✓" : event.status === "error" ? "✗" : "⊘";
           const summary =
             event.summary.length > 600 ? event.summary.slice(0, 600) + "…" : event.summary;
+          setAgentRuns((prev) =>
+            prev.map((r) =>
+              r.runId === event.runId
+                ? { ...r, status: event.status, endedAt: Date.now() }
+                : r,
+            ),
+          );
           setDisplayMessages((prev) => [
             ...prev,
             toDisplayMessage(
@@ -305,23 +329,29 @@ export function App({ session, workdir, onQuit }: AppProps) {
         }
         case "agent_event": {
           const inner = event.event;
+          const agentTag = `[${event.workerId}#${event.runId}]`;
           if (inner.type === "tool_call") {
+            setAgentRuns((prev) =>
+              prev.map((r) =>
+                r.runId === event.runId ? { ...r, lastTool: inner.toolCall.name } : r,
+              ),
+            );
             setDisplayMessages((prev) => [
               ...prev,
               toDisplayMessage(
                 "tool",
-                `  ↳ ${formatToolForDisplay(inner.toolCall.name, inner.toolCall.arguments)}`,
+                `  ↳ ${agentTag} ${formatToolForDisplay(inner.toolCall.name, inner.toolCall.arguments)}`,
                 `${event.workerId}:${inner.toolCall.name}`,
               ),
             ]);
           } else if (inner.type === "tool_progress") {
-            setToolProgress(inner.message);
+            setToolProgress(`${agentTag} ${inner.message}`);
           } else if (inner.type === "tool_result") {
             setDisplayMessages((prev) => [
               ...prev,
               toDisplayMessage(
                 "tool",
-                `  ↳ ${formatToolForDisplay(inner.name, inner.result)}`,
+                `  ↳ ${agentTag} ${formatToolForDisplay(inner.name, inner.result)}`,
                 `${event.workerId}:${inner.name}`,
               ),
             ]);
@@ -492,8 +522,44 @@ export function App({ session, workdir, onQuit }: AppProps) {
         setStreamingText("");
         setScrollOffset(null);
         setPendingPlanExecutionSummary(null);
+        setAgentRuns([]);
+        setPendingMultiWorkflowChoice(false);
         setCurrentSessionId(session.getSessionId());
         return;
+      }
+      if (pendingMultiWorkflowChoice) {
+        const answer = value.trim().toLowerCase();
+        if (answer === "yes" || answer === "y") {
+          const profiles = loadWorkflowAgents(workdir);
+          session.setMultiAgentWorkflow(profiles);
+          session.setOrchestratorMode("multi");
+          setPendingMultiWorkflowChoice(false);
+          setDisplayMessages((prev) => [
+            ...prev,
+            toDisplayMessage("user", value),
+            toDisplayMessage(
+              "assistant",
+              profiles
+                ? `Multi-agent mode ON with your custom team from ${WORKFLOW_FILE_NAME}: ${profiles.map((p) => p.id).join(", ")}. The interview will be skipped — just describe the task.`
+                : `Could not parse any agents from ${WORKFLOW_FILE_NAME} — using the default team (scout, implementer, reviewer). Multi-agent mode ON.`,
+            ),
+          ]);
+          return;
+        }
+        if (answer === "no" || answer === "n") {
+          session.setMultiAgentWorkflow(null);
+          session.setOrchestratorMode("multi");
+          setPendingMultiWorkflowChoice(false);
+          setDisplayMessages((prev) => [
+            ...prev,
+            toDisplayMessage("user", value),
+            toDisplayMessage(
+              "assistant",
+              "Multi-agent mode ON with the default team (scout, implementer, reviewer). On your first prompt the boss will ask how many agents to spawn and propose a team plan.",
+            ),
+          ]);
+          return;
+        }
       }
       if (pendingPlanExecutionSummary) {
         const answer = value.trim().toLowerCase();
@@ -540,6 +606,59 @@ export function App({ session, workdir, onQuit }: AppProps) {
       }
       if (value === "/boss") {
         session.toggleOrchestratorMode();
+        return;
+      }
+      if (value === "/multi") {
+        if (session.getOrchestratorMode() === "multi") {
+          session.setOrchestratorMode("off");
+          session.setMultiAgentWorkflow(null);
+          setDisplayMessages((prev) => [
+            ...prev,
+            toDisplayMessage("user", value),
+            toDisplayMessage("assistant", "Multi-agent mode OFF."),
+          ]);
+          return;
+        }
+        const workflowContent = loadWorkflowFile(workdir);
+        if (workflowContent) {
+          setPendingMultiWorkflowChoice(true);
+          setDisplayMessages((prev) => [
+            ...prev,
+            toDisplayMessage("user", value),
+            toDisplayMessage(
+              "assistant",
+              `Found ${WORKFLOW_FILE_NAME} in this project. Use your custom multi-agent workflow from it?\n\nOptions: yes / no`,
+            ),
+          ]);
+          return;
+        }
+        session.setMultiAgentWorkflow(null);
+        session.setOrchestratorMode("multi");
+        setDisplayMessages((prev) => [
+          ...prev,
+          toDisplayMessage("user", value),
+          toDisplayMessage(
+            "assistant",
+            `Multi-agent mode ON with the default team (scout, implementer, reviewer). On your first prompt the boss will ask how many agents to spawn and propose a team plan.\n\nTip: define your own team to skip the interview — create the workflow file here:\n${getWorkflowFilePath(workdir)}`,
+          ),
+        ]);
+        return;
+      }
+      if (value === "/agents") {
+        const lines =
+          agentRuns.length === 0
+            ? "No agent runs this turn. Runs appear here after the boss dispatches agents in multi mode."
+            : agentRuns
+                .map(
+                  (r) =>
+                    `${r.agentId} #${r.runId} — ${r.status}${r.model ? ` (${r.model})` : ""}\n  log: ${getTracePath(session.getSessionId(), r.runId)}`,
+                )
+                .join("\n");
+        setDisplayMessages((prev) => [
+          ...prev,
+          toDisplayMessage("user", value),
+          toDisplayMessage("assistant", lines),
+        ]);
         return;
       }
       if (value === "/trace") {
@@ -651,6 +770,8 @@ export function App({ session, workdir, onQuit }: AppProps) {
       openApiKeyPrompt,
       workdir,
       pendingPlanExecutionSummary,
+      pendingMultiWorkflowChoice,
+      agentRuns,
     ],
   );
 
@@ -818,6 +939,10 @@ export function App({ session, workdir, onQuit }: AppProps) {
         updateInfo={updateInfo}
         contextUsage={contextUsage}
       />
+
+      {overlay === "none" && orchestratorMode === "multi" && agentRuns.length > 0 && (
+        <AgentStatusPanel theme={theme} runs={agentRuns} />
+      )}
 
       {overlay === "none" && (
         <Box flexShrink={0}>

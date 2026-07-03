@@ -7,6 +7,7 @@ export interface ThemeColors {
   warning: string;
   error: string;
   boss: string;
+  multi: string;
   border: string;
   borderActive: string;
 }
@@ -21,9 +22,17 @@ export const theme: ThemeColors = {
   warning: "yellow",
   error: "red",
   boss: "magenta",
+  multi: "blueBright",
   border: "gray",
   borderActive: "white",
 };
+
+/** Stable per-agent accent colors for parallel multi-agent output. */
+export const AGENT_COLORS = ["cyan", "yellow", "green", "magenta", "blue", "red"] as const;
+
+export function agentColor(index: number): string {
+  return AGENT_COLORS[index % AGENT_COLORS.length]!;
+}
 
 export function getTheme(): ThemeColors {
   return theme;

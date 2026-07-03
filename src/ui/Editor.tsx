@@ -333,6 +333,8 @@ export function Editor({
         <Text color={theme.textMuted}>
           {orchestratorMode === "boss" ? (
             <Text color={theme.boss}>Boss</Text>
+          ) : orchestratorMode === "multi" ? (
+            <Text color={theme.multi}>Multi</Text>
           ) : (
             <Text color={agentMode === "plan" ? theme.success : theme.warning}>
               {agentMode === "plan" ? "Plan" : "Build"}

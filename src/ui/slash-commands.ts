@@ -5,6 +5,8 @@ export const SLASH_COMMANDS = [
   { cmd: "/build", desc: "Switch to Build mode (exits boss if active)" },
   { cmd: "/plan", desc: "Switch to Plan mode (exits boss if active)" },
   { cmd: "/boss", desc: "Toggle boss orchestrator mode" },
+  { cmd: "/multi", desc: "Toggle parallel multi-agent mode" },
+  { cmd: "/agents", desc: "List multi-agent runs and their log files" },
   { cmd: "/trace", desc: "Show latest worker trace log path" },
   { cmd: "/compact", desc: "Summarize older messages to free context" },
   { cmd: "/rules", desc: "Show loaded project rule files" },

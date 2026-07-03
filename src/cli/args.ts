@@ -2,6 +2,7 @@ export interface CliArgs {
   print: boolean;
   continueSession: boolean;
   boss: boolean;
+  multi: boolean;
   model?: string;
   prompt?: string;
   help: boolean;
@@ -13,6 +14,7 @@ export function parseArgs(argv: string[]): CliArgs {
     print: false,
     continueSession: false,
     boss: false,
+    multi: false,
     help: false,
   };
 
@@ -28,6 +30,8 @@ export function parseArgs(argv: string[]): CliArgs {
       result.continueSession = true;
     } else if (arg === "--boss") {
       result.boss = true;
+    } else if (arg === "--multi") {
+      result.multi = true;
     } else if (arg === "--model" && args[i + 1]) {
       result.model = args[++i];
     } else if (!arg.startsWith("-")) {
@@ -64,6 +68,7 @@ Options:
   -p, --print          Print response and exit
   -c, --continue       Continue most recent session
   --boss               Enable boss orchestrator mode
+  --multi              Enable parallel multi-agent orchestrator mode
   --model <ref>        Provider/model (e.g. openai/gpt-4o)
   -h, --help           Show help
 

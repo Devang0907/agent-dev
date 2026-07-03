@@ -21,6 +21,8 @@ import { diffTool, executeDiff } from "./diff.js";
 import { memoryTool, executeMemory } from "./memory.js";
 import { planTool, executePlan } from "./plan.js";
 import { delegateTool, executeDelegate } from "./delegate.js";
+import { spawnAgentsTool, executeSpawnAgents } from "../multi-agent/tools/spawn-agents.js";
+import { askUserTool, executeAskUser } from "../multi-agent/tools/ask-user.js";
 import { databaseTool, executeDatabase, isSelectOnlyQuery, formatDatabasePermissionCommand } from "./database.js";
 import { docsTool, executeDocs } from "./docs.js";
 import { verifyTool, executeVerify } from "./verify.js";
@@ -62,6 +64,8 @@ export const BUILTIN_TOOLS: AgentTool[] = [
   { definition: memoryTool, execute: (args) => executeMemory(args as { action: string; key?: string; value?: string }) },
   { definition: planTool, execute: (args, _wd, sessionId) => executePlan(args as Parameters<typeof executePlan>[0], sessionId) },
   { definition: delegateTool, execute: (args) => executeDelegate(args as Parameters<typeof executeDelegate>[0]) },
+  { definition: spawnAgentsTool, execute: (args) => executeSpawnAgents(args as Parameters<typeof executeSpawnAgents>[0]) },
+  { definition: askUserTool, execute: (args) => executeAskUser(args as Parameters<typeof executeAskUser>[0]) },
   { definition: databaseTool, execute: (args, wd) => executeDatabase(args as { database: string; query: string }, wd) },
   { definition: verifyTool, execute: (args, wd) => executeVerify(args as { command?: string; type?: string }, wd) },
   { definition: mcpTool, execute: (args) => executeMcp(args as { action: string; server?: string; tool?: string; arguments?: Record<string, unknown> }) },
@@ -126,6 +130,9 @@ export function formatPermissionCommand(name: string, args: Record<string, unkno
 /** Tools only available to the boss orchestrator */
 const BOSS_ONLY_TOOLS = new Set(["delegate"]);
 
+/** Tools only available to the multi-agent orchestrator */
+const MULTI_ONLY_TOOLS = new Set(["spawn_agents", "ask_user"]);
+
 export function getToolDefinitions(
   mode: AgentMode = "build",
   allowedTools?: string[],
@@ -135,7 +142,7 @@ export function getToolDefinitions(
     const set = new Set(allowedTools);
     all = all.filter((t) => set.has(t.name));
   } else {
-    all = all.filter((t) => !BOSS_ONLY_TOOLS.has(t.name));
+    all = all.filter((t) => !BOSS_ONLY_TOOLS.has(t.name) && !MULTI_ONLY_TOOLS.has(t.name));
   }
   return getToolDefinitionsForMode(all, mode) as ToolDefinition[];
 }

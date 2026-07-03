@@ -75,13 +75,18 @@ export async function runPrintMode(session: AgentSession, prompt: string): Promi
   }
 
   const model = session.getModel();
-  const boss = session.getOrchestratorMode() === "boss";
+  const orchestrator = session.getOrchestratorMode();
   console.log(
     chalk.gray(`Model: ${model.provider}/${model.id}`) +
-      (boss ? chalk.magenta(" · BOSS mode") : ""),
+      (orchestrator === "boss"
+        ? chalk.magenta(" · BOSS mode")
+        : orchestrator === "multi"
+          ? chalk.blueBright(" · MULTI-AGENT mode")
+          : ""),
   );
 
-  let activeWorker: { runId: string; workerId: string } | null = null;
+  let activeWorkerCount = 0;
+  const activeWorker = () => activeWorkerCount > 0;
 
   const handler = (event: SessionEvent) => {
     if (event.type === "permission_request") {
@@ -99,9 +104,10 @@ export async function runPrintMode(session: AgentSession, prompt: string): Promi
       return;
     }
     if (event.type === "delegation_start") {
-      activeWorker = { runId: event.runId, workerId: event.workerId };
+      activeWorkerCount++;
+      const modelTag = event.model ? chalk.gray(` (${event.model})`) : "";
       console.log(
-        chalk.cyan(`\n[${event.workerId}#${event.runId}] ${event.task}`),
+        chalk.cyan(`\n[${event.workerId}#${event.runId}]`) + modelTag + chalk.cyan(` ${event.task}`),
       );
       return;
     }
@@ -113,7 +119,7 @@ export async function runPrintMode(session: AgentSession, prompt: string): Promi
             ? chalk.red
             : chalk.yellow;
       console.log(color(`\n[${event.workerId}#${event.runId}] ${event.status}`));
-      activeWorker = null;
+      activeWorkerCount = Math.max(0, activeWorkerCount - 1);
       return;
     }
     if (event.type === "agent_event") {
@@ -142,13 +148,13 @@ export async function runPrintMode(session: AgentSession, prompt: string): Promi
     }
     if (!isCoreAgentEvent(event)) return;
 
-    if (event.type === "text_delta" && !activeWorker) {
+    if (event.type === "text_delta" && !activeWorker()) {
       process.stdout.write(event.delta);
-    } else if (event.type === "tool_call" && !activeWorker) {
+    } else if (event.type === "tool_call" && !activeWorker()) {
       console.log(chalk.yellow(`\n[tool: ${event.toolCall.name}]`));
-    } else if (event.type === "tool_progress" && !activeWorker) {
+    } else if (event.type === "tool_progress" && !activeWorker()) {
       console.log(chalk.gray(event.message));
-    } else if (event.type === "tool_result" && !activeWorker) {
+    } else if (event.type === "tool_result" && !activeWorker()) {
       console.log(chalk.gray(event.result.slice(0, 500)));
     } else if (event.type === "error") {
       console.error(chalk.red(event.message));

@@ -42,8 +42,10 @@ export function Footer({ workdir, model, theme, scrollHint, orchestratorMode, up
         {"  "}
         {orchestratorMode === "boss" ? (
           <Text color={theme.boss}>BOSS</Text>
+        ) : orchestratorMode === "multi" ? (
+          <Text color={theme.multi}>MULTI</Text>
         ) : null}
-        {orchestratorMode === "boss" ? " · " : null}
+        {orchestratorMode === "boss" || orchestratorMode === "multi" ? " · " : null}
         <Text color={theme.text}>{modelRef(model)}</Text>
         {contextUsage && contextUsage.tokens > 0 && (
           <>

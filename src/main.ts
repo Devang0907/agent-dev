@@ -29,7 +29,9 @@ export async function main(): Promise<void> {
 
   const settings = args.boss
     ? setOrchestratorMode(loadSettings(), "boss")
-    : loadSettings();
+    : args.multi
+      ? setOrchestratorMode(loadSettings(), "multi")
+      : loadSettings();
   const workdir = process.cwd();
 
   let sessionManager: SessionManager;

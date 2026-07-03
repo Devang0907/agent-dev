@@ -19,6 +19,7 @@ import {
   systemPromptForModel,
 } from "./system-prompt.js";
 import { isContextOverflowError } from "./compaction/tokens.js";
+import { checkFileScopeBlock } from "./multi-agent/file-claims.js";
 
 export interface InteractionRequest {
   toolCallId: string;
@@ -53,13 +54,14 @@ export type CoreAgentEvent =
   | { type: "error"; message: string };
 
 export type OrchestratorEvent =
-  | { type: "delegation_start"; runId: string; workerId: string; task: string }
+  | { type: "delegation_start"; runId: string; workerId: string; task: string; model?: string }
   | {
       type: "delegation_end";
       runId: string;
       workerId: string;
       status: "success" | "error" | "aborted";
       summary: string;
+      model?: string;
     }
   | { type: "agent_event"; runId: string; workerId: string; event: CoreAgentEvent };
 
@@ -81,6 +83,10 @@ export interface AgentLoopOptions {
   sessionId?: string;
   streamChatOverride?: typeof defaultStreamChat;
   onContextOverflow?: () => Promise<boolean>;
+  /** Multi-agent: restrict write/edit/diff to these paths (workdir-relative). */
+  fileScope?: string[];
+  /** Multi-agent: extra guard consulted before write/edit/diff (claim registry). */
+  fileWriteGuard?: (path: string) => string | null;
 }
 
 function isToolUseFailedError(message: string): boolean {
@@ -143,6 +149,8 @@ async function runToolBatch(
   onInteractionRequest?: (request: InteractionRequest) => Promise<string | null>,
   sessionId?: string,
   settings?: Settings,
+  fileScope?: string[],
+  fileWriteGuard?: (path: string) => string | null,
 ): Promise<boolean> {
   let stopAfterBatch = false;
 
@@ -159,6 +167,13 @@ async function runToolBatch(
     if (planBlock) {
       onEvent({ type: "tool_result", toolCallId: tc.id, name: tc.name, result: planBlock });
       context.push({ role: "tool", content: planBlock, toolCallId: tc.id, name: tc.name });
+      continue;
+    }
+
+    const scopeBlock = checkFileScopeBlock(tc.name, args, workdir, fileScope, fileWriteGuard);
+    if (scopeBlock) {
+      onEvent({ type: "tool_result", toolCallId: tc.id, name: tc.name, result: scopeBlock });
+      context.push({ role: "tool", content: scopeBlock, toolCallId: tc.id, name: tc.name });
       continue;
     }
 
@@ -348,6 +363,8 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<ChatMessa
     sessionId,
     streamChatOverride,
     onContextOverflow,
+    fileScope,
+    fileWriteGuard,
   } = options;
 
   const context = [...messages];
@@ -455,6 +472,8 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<ChatMessa
       onInteractionRequest,
       sessionId,
       settings,
+      fileScope,
+      fileWriteGuard,
     );
 
     if (stopAfterBatch) {

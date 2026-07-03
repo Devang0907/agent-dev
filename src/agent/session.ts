@@ -2,7 +2,7 @@ import { EventEmitter } from "node:events";
 import type { ChatMessage, Model } from "../providers/types.js";
 import type { Settings } from "../config/settings.js";
 import { findModel } from "../config/models.js";
-import { setDefaultModel, saveSettings, setAgentMode, setOrchestratorMode } from "../config/settings.js";
+import { setDefaultModel, saveSettings, setAgentMode, setOrchestratorMode, getMultiAgentMaxParallel } from "../config/settings.js";
 import type { OrchestratorMode } from "../config/settings.js";
 import { getAvailableModels, getDefaultModelForProvider } from "../providers/registry.js";
 import { runAgentLoop, type AgentEvent, type PermissionRequest, type InteractionRequest } from "./loop.js";
@@ -15,6 +15,13 @@ import {
   setDelegationContext,
   MAX_DELEGATIONS_PER_TURN,
 } from "./orchestrator/context.js";
+import {
+  setMultiAgentContext,
+  createClaimRegistry,
+  MAX_SPAWNS_PER_TURN,
+} from "./multi-agent/context.js";
+import { buildMultiBossPrompt, MULTI_BOSS_TOOL_NAMES } from "./multi-agent/prompt.js";
+import type { MultiAgentProfile } from "./multi-agent/agents.js";
 import { clearLegacyGlobalPlan } from "./tools/plan.js";
 import { closeBrowserSession } from "./tools/browser/session.js";
 import { stopBackgroundProcesses } from "./tools/shell.js";
@@ -70,6 +77,8 @@ export class AgentSession extends EventEmitter {
   private contextUsage: ContextUsageState = { tokens: 0, window: 128_000, percent: 0 };
   private lastStreamUsage?: { inputTokens?: number; outputTokens?: number };
   private compactedThisTurn = false;
+  /** Custom agent team from multi_agents.md, pre-approved by the user. */
+  private multiAgentWorkflow: MultiAgentProfile[] | null = null;
 
   constructor(
     settings: Settings,
@@ -179,9 +188,9 @@ export class AgentSession extends EventEmitter {
     this.emit("event", { type: "agent_mode_changed", mode } satisfies SessionEvent);
   }
 
-  /** Switch build/plan and leave boss orchestrator if it was active. */
+  /** Switch build/plan and leave any orchestrator (boss/multi) if active. */
   switchToAgentMode(mode: AgentMode): void {
-    if (this.getOrchestratorMode() === "boss") {
+    if (this.getOrchestratorMode() !== "off") {
       this.setOrchestratorMode("off");
     }
     this.setAgentMode(mode);
@@ -212,12 +221,32 @@ export class AgentSession extends EventEmitter {
     return next;
   }
 
+  toggleMultiAgentMode(): OrchestratorMode {
+    const next = this.getOrchestratorMode() === "multi" ? "off" : "multi";
+    this.setOrchestratorMode(next);
+    return next;
+  }
+
+  setMultiAgentWorkflow(profiles: MultiAgentProfile[] | null): void {
+    this.multiAgentWorkflow = profiles;
+  }
+
+  getMultiAgentWorkflow(): MultiAgentProfile[] | null {
+    return this.multiAgentWorkflow;
+  }
+
   private isBossMode(): boolean {
     return this.getOrchestratorMode() === "boss";
   }
 
+  private isMultiMode(): boolean {
+    return this.getOrchestratorMode() === "multi";
+  }
+
   private async runLoop(messages: ChatMessage[]): Promise<ChatMessage[]> {
     const isBoss = this.isBossMode();
+    const isMulti = this.isMultiMode();
+    const isOrchestrator = isBoss || isMulti;
 
     if (isBoss) {
       setDelegationContext({
@@ -234,16 +263,49 @@ export class AgentSession extends EventEmitter {
       });
     }
 
+    if (isMulti) {
+      setMultiAgentContext({
+        sessionId: this.getSessionId(),
+        bossModel: this.model,
+        settings: this.settings,
+        workdir: this.workdir,
+        signal: this.abortController?.signal,
+        onEvent: (event) => this.emit("event", event),
+        onPermissionRequest: (request) => this.requestCommandPermission(request),
+        onInteractionRequest: (request) => this.requestInteraction(request),
+        customAgents: this.multiAgentWorkflow,
+        claims: createClaimRegistry(this.workdir),
+        spawnCount: 0,
+        maxSpawnsPerTurn: MAX_SPAWNS_PER_TURN,
+        maxParallel: getMultiAgentMaxParallel(this.settings),
+      });
+    }
+
+    const systemPrompt = isBoss
+      ? buildBossSystemPrompt()
+      : isMulti
+        ? buildMultiBossPrompt({
+            settings: this.settings,
+            customAgents: this.multiAgentWorkflow,
+            workflowLoaded: this.multiAgentWorkflow !== null,
+            maxParallel: getMultiAgentMaxParallel(this.settings),
+          })
+        : undefined;
+
     try {
       return await runAgentLoop({
         model: this.model,
         messages,
         settings: this.settings,
         workdir: this.workdir,
-        agentMode: isBoss ? "build" : this.getAgentMode(),
-        modeSwitchNote: isBoss ? undefined : this.modeSwitchNote(),
-        systemPrompt: isBoss ? buildBossSystemPrompt() : undefined,
-        allowedTools: isBoss ? [...BOSS_TOOL_NAMES] : undefined,
+        agentMode: isOrchestrator ? "build" : this.getAgentMode(),
+        modeSwitchNote: isOrchestrator ? undefined : this.modeSwitchNote(),
+        systemPrompt,
+        allowedTools: isBoss
+          ? [...BOSS_TOOL_NAMES]
+          : isMulti
+            ? [...MULTI_BOSS_TOOL_NAMES]
+            : undefined,
         signal: this.abortController?.signal,
         onEvent: (event) => {
           if (event.type === "context_usage") {
@@ -269,6 +331,7 @@ export class AgentSession extends EventEmitter {
       });
     } finally {
       if (isBoss) setDelegationContext(null);
+      if (isMulti) setMultiAgentContext(null);
     }
   }
 
