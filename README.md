@@ -1,8 +1,8 @@
 <p align="center">
-  <img src=".github/logo.ico" alt="agent-dev logo" width="120" />
+  <img src=".github/logo.ico" alt="Agent Dev logo" width="120" />
 </p>
 
-<h1 align="center">agent-dev</h1>
+<h1 align="center">Agent Dev</h1>
 
 <p align="center"><strong>A minimal terminal coding agent with an Ink TUI</strong></p>
 
@@ -72,7 +72,7 @@ Model refs use `provider/model-id`, e.g. `anthropic/claude-sonnet-4-6`, `openai/
 
 ### Free models (OpenRouter)
 
-Free models use the `:free` suffix on OpenRouter. Availability changes often — agent-dev migrates retired slugs and retries fallbacks automatically. If a model fails, use **`/model openrouter/free`** (auto-picks a working free model).
+Free models use the `:free` suffix on OpenRouter. Availability changes often — Agent Dev migrates retired slugs and retries fallbacks automatically. If a model fails, use **`/model openrouter/free`** (auto-picks a working free model).
 
 | Model | Slug |
 |-------|------|
@@ -134,7 +134,7 @@ agent skills list
 
 ## Telegram gateway
 
-Chat with agent-dev from your phone via Telegram (OpenClaw-style). The gateway runs on your PC, uses long-polling (no public URL or port forwarding), and forwards DMs to the agent. Shell/git/exec approvals arrive as **Approve / Deny** inline buttons. You can also set **reminders** and **daily tasks** (e.g. morning news) that fire while the gateway is running.
+Chat with Agent Dev from your phone via Telegram (OpenClaw-style). The gateway runs on your PC, uses long-polling (no public URL or port forwarding), and forwards DMs to the agent. Shell/git/exec approvals arrive as **Approve / Deny** inline buttons. You can also set **reminders** and **daily tasks** (e.g. morning news) that fire while the gateway is running.
 
 On first connect, send `/start` (or any message) to receive a welcome guide with available commands and capabilities.
 
@@ -275,7 +275,7 @@ While the agent is busy, Telegram accepts **one queued follow-up message** per c
 
 ## Context compaction
 
-Long sessions can exceed model context limits. agent-dev tracks approximate token usage (footer shows `ctx 42k/128k`) and compacts older history when needed.
+Long sessions can exceed model context limits. Agent Dev tracks approximate token usage (footer shows `ctx 42k/128k`) and compacts older history when needed.
 
 | Trigger | Behavior |
 |---------|----------|
@@ -663,7 +663,7 @@ Set `orchestratorMode` to `"boss"` or `"multi"` to enable an orchestrator mode b
 
 ## Architecture
 
-agent-dev is a single-agent **ReAct loop** — no LangGraph or external agent framework. The core loop streams an LLM response, executes tool calls, and repeats until done.
+Agent Dev is a single-agent **ReAct loop** — no LangGraph or external agent framework. The core loop streams an LLM response, executes tool calls, and repeats until done.
 
 Boss mode nests additional `runAgentLoop` instances inside the `delegate` tool, following the [orchestrator-workers](https://www.anthropic.com/engineering/building-effective-agents) pattern: the boss dynamically decomposes tasks and delegates to workers with isolated context.
 
