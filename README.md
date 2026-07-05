@@ -1,8 +1,41 @@
-# agent-dev
+<p align="center">
+  <img src=".github/logo.ico" alt="agent-dev logo" width="120" />
+</p>
 
-A minimal terminal coding agent with an Ink TUI. Chat with an AI that can read and edit code, search the web, run git/shell commands (with approval), use MCP servers, load skills, schedule Telegram reminders and daily tasks, and optionally orchestrate work through a **boss orchestrator** (sequential workers) or a **multi-agent orchestrator** that runs several specialized agents **in parallel** on the same codebase. If a model hits a rate limit or quota, the agent **fails over to the next connected model automatically** instead of getting stuck.
+<h1 align="center">agent-dev</h1>
+
+<p align="center"><strong>A minimal terminal coding agent with an Ink TUI</strong></p>
+
+<p align="center">by <a href="https://github.com/Devang0907">@Devang0907</a></p>
+
+<p align="center">
+  <a href="https://github.com/Devang0907/agent-dev/actions/workflows/test.yml"><img src="https://img.shields.io/github/actions/workflow/status/Devang0907/agent-dev/test.yml?label=test" alt="test status" /></a>
+  <a href="https://github.com/Devang0907/agent-dev"><img src="https://img.shields.io/github/license/Devang0907/agent-dev" alt="MIT license" /></a>
+  <a href="https://www.npmjs.com/package/@devang0907/agent-dev"><img src="https://img.shields.io/npm/v/@devang0907/agent-dev?label=npm" alt="npm version" /></a>
+  <a href="https://www.npmjs.com/package/@devang0907/agent-dev"><img src="https://img.shields.io/npm/dw/@devang0907/agent-dev?label=downloads" alt="npm downloads per week" /></a>
+  <a href="https://github.com/Devang0907/agent-dev/stargazers"><img src="https://img.shields.io/github/stars/Devang0907/agent-dev?style=social" alt="GitHub stars" /></a>
+</p>
+
+<p align="center">
+  <a href="https://agent-dev.dev/docs">Docs</a>
+  •
+  <a href="https://github.com/Devang0907/agent-dev">GitHub</a>
+  •
+  <a href="https://www.npmjs.com/package/@devang0907/agent-dev">npm</a>
+  •
+  <a href="https://agent-dev-website.vercel.app">Website</a>
+</p>
+
+Chat with an AI that can read and edit code, search the web, run git/shell commands (with approval), use MCP servers, load skills, schedule Telegram reminders and daily tasks, and optionally orchestrate work through a **boss orchestrator** (sequential workers) or a **multi-agent orchestrator** that runs several specialized agents **in parallel** on the same codebase. If a model hits a rate limit or quota, the agent **fails over to the next connected model automatically** instead of getting stuck.
 
 ## Quick start
+
+**Global install (npm):**
+
+```bash
+npm install -g @devang0907/agent-dev
+agent
+```
 
 **From source:**
 
@@ -11,13 +44,6 @@ git clone https://github.com/Devang0907/agent-dev.git
 cd agent-dev
 npm install
 npm run dev
-```
-
-**Global install (npm):**
-
-```bash
-npm install -g @devang0907/agent-dev
-agent
 ```
 
 Set at least one API key:
