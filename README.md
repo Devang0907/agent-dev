@@ -263,13 +263,34 @@ While the agent is busy, Telegram accepts **one queued follow-up message** per c
 | `/connect` | Configure gateway connection (Telegram bot token and allowed user IDs) |
 | `/skills` | Browse and install skills (Vercel CLI) |
 | `/skill <name>` | Load a skill for the current turn |
+| `/voice` | Speak a task (voice input) |
 | `/new` | Start a new session |
 | `/quit` | Exit |
+
+## Voice input
+
+Speak tasks instead of typing. The agent has a **`voice` tool** — ask it to listen (e.g. *"use voice to hear my task"*) and it will record your speech, transcribe via **Groq Whisper** (`whisper-large-v3-turbo`), and continue with the transcript.
+
+You can also type **`/voice`** in the terminal to speak directly into the input box (review transcript, then Enter to send).
+
+Requires `GROQ_API_KEY` (same key as Groq LLM models). Press **Esc** while listening to cancel.
+
+Optional voice settings in `~/.agent-dev/settings.json`:
+
+```json
+{
+  "voice": {
+    "language": "en",
+    "silenceMs": 1500,
+    "maxDurationMs": 60000
+  }
+}
+```
 
 **Keyboard shortcuts:**
 
 - **Tab** / **Shift+Tab** — cycle Build ↔ Plan when input is empty
-- **Esc** — abort a running turn
+- **Esc** — abort a running turn (or cancel `/voice` listening)
 - **Ctrl+G** — scroll chat to latest
 - **Ctrl+U** / **Ctrl+D** — scroll chat up/down
 

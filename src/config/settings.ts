@@ -43,6 +43,15 @@ export interface MultiAgentSettings {
   maxParallel?: number;
 }
 
+export interface VoiceSettings {
+  /** ISO-639-1 language code for transcription (default "en"). */
+  language?: string;
+  /** VAD silence holdoff in ms before stopping (default 1500). */
+  silenceMs?: number;
+  /** Max recording duration in ms (default 60000). */
+  maxDurationMs?: number;
+}
+
 export type PermissionAction = "allow" | "ask" | "deny";
 export type PermissionRuleValue = PermissionAction | Record<string, PermissionAction>;
 export type PermissionRulesConfig = Partial<
@@ -63,6 +72,19 @@ export interface Settings {
   projectRules?: ProjectRulesSettings;
   permissions?: PermissionRulesConfig;
   multiAgent?: MultiAgentSettings;
+  voice?: VoiceSettings;
+}
+
+export const DEFAULT_VOICE_LANGUAGE = "en";
+export const DEFAULT_VOICE_SILENCE_MS = 1500;
+export const DEFAULT_VOICE_MAX_DURATION_MS = 60_000;
+
+export function getVoiceSettings(settings?: Settings): Required<VoiceSettings> {
+  return {
+    language: settings?.voice?.language ?? DEFAULT_VOICE_LANGUAGE,
+    silenceMs: settings?.voice?.silenceMs ?? DEFAULT_VOICE_SILENCE_MS,
+    maxDurationMs: settings?.voice?.maxDurationMs ?? DEFAULT_VOICE_MAX_DURATION_MS,
+  };
 }
 
 export const DEFAULT_MULTI_AGENT_MAX_PARALLEL = 3;
@@ -159,6 +181,7 @@ export function loadSettings(): Settings {
       projectRules: parsed.projectRules,
       permissions: parsed.permissions,
       multiAgent: parsed.multiAgent,
+      voice: parsed.voice,
     };
     if (migrated) saveSettings(settings);
     return settings;

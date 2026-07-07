@@ -25,6 +25,7 @@ function wantsNewlineOnEnter(input: string, key: Key): boolean {
 
 import type { AgentMode } from "../agent/mode.js";
 import type { OrchestratorMode } from "../config/settings.js";
+import type { VoiceState } from "../voice/types.js";
 
 interface EditorProps {
   theme: ThemeColors;
@@ -35,6 +36,9 @@ interface EditorProps {
   contentWidth?: number;
   disabled?: boolean;
   running?: boolean;
+  voiceState?: VoiceState;
+  voiceTranscript?: string;
+  voiceTranscriptSeq?: number;
   onSuggestionsOpenChange?: (open: boolean) => void;
   onModeCycle?: (direction: 1 | -1) => void;
   onSubmit: (value: string) => void;
@@ -63,6 +67,9 @@ export function Editor({
   contentWidth = 72,
   disabled,
   running,
+  voiceState = "idle",
+  voiceTranscript,
+  voiceTranscriptSeq = 0,
   onSuggestionsOpenChange,
   onModeCycle,
   onSubmit,
@@ -76,6 +83,7 @@ export function Editor({
   const [cursorOn, setCursorOn] = useState(true);
 
   const skillList = useMemo(() => skills, [skills]);
+  const voiceBusy = voiceState === "listening" || voiceState === "transcribing";
   const isSkillPicker = value === "/skill" || value.startsWith("/skill ");
   const pickerOpen = suggestions.length > 0;
 
@@ -131,6 +139,13 @@ export function Editor({
     [skillList],
   );
 
+  useEffect(() => {
+    if (!voiceTranscriptSeq || voiceTranscript === undefined) return;
+    setValue(voiceTranscript);
+    setCursorPos(voiceTranscript.length);
+    updateSuggestions(voiceTranscript);
+  }, [voiceTranscript, voiceTranscriptSeq, updateSuggestions]);
+
   const setValueAndCursor = useCallback((next: string, nextCursor: number) => {
     setValue(next);
     setCursorPos(Math.max(0, Math.min(nextCursor, next.length)));
@@ -185,7 +200,7 @@ export function Editor({
 
   useAppInput(
     (input, key) => {
-      if (disabled) return;
+      if (disabled || voiceBusy) return;
 
       if (pickerOpen && (key.upArrow || key.downArrow)) {
         movePicker(key.upArrow ? -1 : 1);
@@ -267,7 +282,7 @@ export function Editor({
         insertAtCursor(input);
       }
     },
-    { isActive: !disabled },
+    { isActive: !disabled && !voiceBusy },
   );
 
   const visibleSuggestions = suggestions.slice(
@@ -276,8 +291,12 @@ export function Editor({
   );
   const descMax = Math.max(16, contentWidth - 28);
 
-  const placeholder = "Ask anything…";
-  const showCursor = !disabled && cursorOn;
+  const placeholder = voiceBusy
+    ? voiceState === "transcribing"
+      ? "Transcribing…"
+      : "Listening… speak your task"
+    : "Ask anything…";
+  const showCursor = !disabled && !voiceBusy && cursorOn;
 
   return (
     <Box flexDirection="column" marginX={2}>
@@ -315,7 +334,7 @@ export function Editor({
         </Box>
       )}
 
-      <Panel theme={theme} borderColor={disabled ? theme.border : theme.primary} marginBottom={0}>
+      <Panel theme={theme} borderColor={disabled || voiceBusy ? theme.border : theme.primary} marginBottom={0}>
         <Box flexDirection="row">
           {value.length > 0 || cursorPos > 0 ? (
             <Text color={theme.text}>
@@ -326,7 +345,7 @@ export function Editor({
           ) : (
             <>
               <BlinkingCursor theme={theme} visible={showCursor} />
-              <Text color={theme.textMuted}>{placeholder}</Text>
+              <Text color={voiceBusy ? theme.primary : theme.textMuted}>{placeholder}</Text>
             </>
           )}
         </Box>

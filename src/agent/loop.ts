@@ -12,6 +12,7 @@ import type { Settings } from "../config/settings.js";
 import { getToolDefinitions, executeTool, needsToolPermission, formatPermissionCommand, checkPlanModeToolBlock, resolveToolPermission } from "./tools/index.js";
 import { setSkillContext } from "./skills.js";
 import { setBrowserContext } from "./tools/browser-context.js";
+import { setVoiceContext } from "./tools/voice-context.js";
 import type { AgentMode } from "./mode.js";
 import {
   buildDefaultSystemPrompt,
@@ -25,7 +26,7 @@ import { modelRef } from "../config/models.js";
 
 export interface InteractionRequest {
   toolCallId: string;
-  kind: "manual_step" | "user_input";
+  kind: "manual_step" | "user_input" | "voice_input";
   reason: string;
   placeholder?: string;
 }
@@ -215,6 +216,24 @@ async function runToolBatch(
     const command = formatPermissionCommand(tc.name, args);
 
     const runExecute = async (): Promise<string> => {
+      if (tc.name === "voice") {
+        setVoiceContext({
+          settings,
+          onVoiceRequest: async (prompt) => {
+            if (!onInteractionRequest) return null;
+            return onInteractionRequest({
+              toolCallId: tc.id,
+              kind: "voice_input",
+              reason: prompt ?? "Speak your message…",
+            });
+          },
+        });
+        try {
+          return await executeTool(tc.name, args, workdir, sessionId);
+        } finally {
+          setVoiceContext(null);
+        }
+      }
       if (tc.name === "browser" && sessionId) {
         setBrowserContext({
           sessionId,

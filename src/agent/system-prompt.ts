@@ -27,6 +27,7 @@ const TOOL_SNIPPETS: Record<string, string> = {
   mcp: "Call external MCP tools; mutations need approval",
   skill: "Load a specialized workflow skill by name",
   schedule: "Schedule Telegram reminders and daily recurring tasks",
+  voice: "Listen to the user speak and return transcribed text (requires GROQ_API_KEY)",
   browser:
     "Control a real browser: navigate, click, type, extract, screenshot. Inspect with getPageContent first.",
 };
@@ -45,6 +46,7 @@ const GUIDELINES = [
   "Before purchases, bookings, or deletions in the browser, set requiresApproval: true and use waitForUser for CAPTCHA/OTP/payment.",
   "Never enter credit card numbers via the browser tool — ask the user to complete payment manually.",
   "Use the skill tool when a listed skill matches the task.",
+  "Use the voice tool when the user wants to speak instead of type, or asks for voice input.",
   "git write actions, bash, exec, database mutations, mcp call_tool, and destructive browser actions require user approval — proceed only after approval.",
   "When the task is complete, reply briefly to confirm what was done.",
 ];

@@ -30,6 +30,7 @@ import { mcpTool, executeMcp, formatMcpPermissionCommand } from "./mcp.js";
 import { skillTool, executeSkill } from "./skill.js";
 import { scheduleTool, executeSchedule } from "./schedule.js";
 import { browserTool, executeBrowser } from "./browser/index.js";
+import { voiceTool, executeVoice } from "./voice.js";
 import { listDirTool, executeListDir } from "./list-dir.js";
 import {
   isDestructiveBrowserAction,
@@ -72,6 +73,7 @@ export const BUILTIN_TOOLS: AgentTool[] = [
   { definition: skillTool, execute: (args) => executeSkill(args as { name: string }) },
   { definition: scheduleTool, execute: (args) => executeSchedule(args as Parameters<typeof executeSchedule>[0]) },
   { definition: browserTool, execute: (args) => executeBrowser(args as unknown as BrowserToolArgs) },
+  { definition: voiceTool, execute: (args) => executeVoice(args as { prompt?: string }) },
 ];
 
 /** @deprecated Use needsToolPermission instead */

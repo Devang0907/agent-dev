@@ -16,6 +16,7 @@ import { findModel } from "../config/models.js";
 import type { Settings } from "../config/settings.js";
 import { CommandApprovalPrompt } from "./CommandApprovalPrompt.js";
 import { BrowserInteractionPrompt } from "./BrowserInteractionPrompt.js";
+import { VoiceInteractionPrompt } from "./VoiceInteractionPrompt.js";
 import type { PermissionRequest, InteractionRequest } from "../agent/loop.js";
 import { StartupBanner } from "./StartupBanner.js";
 import { getTheme } from "./theme.js";
@@ -52,6 +53,9 @@ import { loadWorkflowAgents, loadWorkflowFile, getWorkflowFilePath, WORKFLOW_FIL
 import { checkForUpdate, type UpdateInfo } from "../version/check.js";
 import { discoverProjectRules, formatProjectRulesSummary } from "../agent/project-rules.js";
 import { formatPermissionRulesSummary } from "../agent/permissions.js";
+import { listenForVoice } from "../voice/listen.js";
+import { VoiceError } from "../voice/types.js";
+import type { VoiceState } from "../voice/types.js";
 
 let nextMessageId = 0;
 
@@ -83,7 +87,7 @@ export interface DisplayMessage {
   toolName?: string;
 }
 
-type Overlay = "none" | "model" | "settings" | "connect" | "skills" | "apiKey" | "commandApproval" | "browserInteraction" | "sessions";
+type Overlay = "none" | "model" | "settings" | "connect" | "skills" | "apiKey" | "commandApproval" | "browserInteraction" | "voiceInteraction" | "sessions";
 
 interface AppProps {
   session: AgentSession;
@@ -119,6 +123,10 @@ export function App({ session, workdir, onQuit }: AppProps) {
   );
   const [model, setModel] = useState(session.getModel());
   const [running, setRunning] = useState(false);
+  const [voiceState, setVoiceState] = useState<VoiceState>("idle");
+  const [voiceTranscript, setVoiceTranscript] = useState<string | undefined>();
+  const [voiceTranscriptSeq, setVoiceTranscriptSeq] = useState(0);
+  const voiceAbortRef = useRef<AbortController | null>(null);
   /** null = follow latest output */
   const [scrollOffset, setScrollOffset] = useState<number | null>(null);
   const [pendingCommand, setPendingCommand] = useState<PermissionRequest | null>(null);
@@ -409,7 +417,7 @@ export function App({ session, workdir, onQuit }: AppProps) {
           break;
         case "interaction_request":
           setPendingInteraction(event.request);
-          setOverlay("browserInteraction");
+          setOverlay(event.request.kind === "voice_input" ? "voiceInteraction" : "browserInteraction");
           break;
         case "model_changed":
           setModel(event.model);
@@ -462,12 +470,61 @@ export function App({ session, workdir, onQuit }: AppProps) {
     { isActive: overlay === "none" && hasChat },
   );
 
+  const startVoiceInput = useCallback(async () => {
+    if (running || voiceState !== "idle") return;
+
+    voiceAbortRef.current?.abort();
+    const controller = new AbortController();
+    voiceAbortRef.current = controller;
+
+    setVoiceState("listening");
+    setVoiceTranscript(undefined);
+
+    try {
+      const text = await listenForVoice(settings, {
+        signal: controller.signal,
+        onStateChange: (state) => setVoiceState(state),
+      });
+      if (controller.signal.aborted) return;
+      setVoiceState("idle");
+      setVoiceTranscript(text);
+      setVoiceTranscriptSeq((seq) => seq + 1);
+    } catch (err) {
+      if (controller.signal.aborted) {
+        setVoiceState("idle");
+        return;
+      }
+      if (err instanceof VoiceError && err.code === "ABORTED") {
+        setVoiceState("idle");
+        return;
+      }
+      const message =
+        err instanceof VoiceError
+          ? err.message
+          : sanitizeErrorForUser(err instanceof Error ? err.message : String(err)) ??
+            "Voice input failed";
+      setVoiceState("error");
+      setDisplayMessages((prev) => [...prev, toDisplayMessage("assistant", message)]);
+      setVoiceState("idle");
+    } finally {
+      if (voiceAbortRef.current === controller) {
+        voiceAbortRef.current = null;
+      }
+    }
+  }, [running, voiceState, settings]);
+
   useAppInput(
     (input, key) => {
       if (overlay !== "none" || suggestionsOpen) return;
 
-      if (key.escape && running) {
-        session.abort();
+      if (key.escape) {
+        if (voiceState === "listening" || voiceState === "transcribing") {
+          voiceAbortRef.current?.abort();
+          return;
+        }
+        if (running) {
+          session.abort();
+        }
         return;
       }
 
@@ -734,6 +791,10 @@ export function App({ session, workdir, onQuit }: AppProps) {
         setOverlay("skills");
         return;
       }
+      if (value === "/voice") {
+        void startVoiceInput();
+        return;
+      }
       if (value.startsWith("/skill add ")) {
         setDisplayMessages((prev) => [
           ...prev,
@@ -772,6 +833,7 @@ export function App({ session, workdir, onQuit }: AppProps) {
       pendingPlanExecutionSummary,
       pendingMultiWorkflowChoice,
       agentRuns,
+      startVoiceInput,
     ],
   );
 
@@ -895,6 +957,19 @@ export function App({ session, workdir, onQuit }: AppProps) {
             }}
           />
         </Box>
+      ) : overlay === "voiceInteraction" && pendingInteraction ? (
+        <Box height={viewportHeight} flexShrink={0} overflow="hidden" paddingX={2}>
+          <VoiceInteractionPrompt
+            theme={theme}
+            request={pendingInteraction}
+            settings={settings}
+            onContinue={(value) => {
+              session.respondToInteraction(value);
+              setPendingInteraction(null);
+              setOverlay("none");
+            }}
+          />
+        </Box>
       ) : overlay === "browserInteraction" && pendingInteraction ? (
         <Box height={viewportHeight} flexShrink={0} overflow="hidden" paddingX={2}>
           <BrowserInteractionPrompt
@@ -955,6 +1030,9 @@ export function App({ session, workdir, onQuit }: AppProps) {
             contentWidth={contentWidth}
             disabled={running}
             running={running}
+            voiceState={voiceState}
+            voiceTranscript={voiceTranscript}
+            voiceTranscriptSeq={voiceTranscriptSeq}
             onSuggestionsOpenChange={setSuggestionsOpen}
             onModeCycle={(direction) => session.cycleAgentMode(direction)}
             onSubmit={handleSubmit}

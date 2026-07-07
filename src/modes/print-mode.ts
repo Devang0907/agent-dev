@@ -25,6 +25,11 @@ async function promptCommandApproval(
 }
 
 async function promptBrowserInteraction(request: InteractionRequest): Promise<string | null> {
+  if (request.kind === "voice_input") {
+    console.log(chalk.cyan(`\n${request.reason}`));
+    console.log(chalk.gray("Voice input is not available in print mode."));
+    return null;
+  }
   if (request.kind === "manual_step") {
     console.log(chalk.cyan(`\n${request.reason}`));
     console.log(chalk.gray("Complete the step in the browser, then press Enter to continue..."));

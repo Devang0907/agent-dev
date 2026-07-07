@@ -14,6 +14,7 @@ export const SLASH_COMMANDS = [
   { cmd: "/tasks", desc: "Show the active task plan (use /tasks clear to reset)" },
   { cmd: "/skills", desc: "Browse and install Vercel skills" },
   { cmd: "/skill", desc: "Load a skill for one turn" },
+  { cmd: "/voice", desc: "Speak into the input box (review then Enter)" },
   { cmd: "/sessions", desc: "Browse saved chat sessions" },
   { cmd: "/new", desc: "New session" },
   { cmd: "/quit", desc: "Exit" },

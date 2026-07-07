@@ -41,6 +41,7 @@
   },
   "dependencies": {
     "chalk": "^5.4.1",
+    "decibri": "^5.0.0",
     "grammy": "^1.44.0",
     "ink": "^5.2.0",
     "openai": "^6.44.0",

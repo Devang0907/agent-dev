@@ -247,9 +247,11 @@ export class TelegramSessionBridge {
     this.pendingInteractionId = interactionId;
 
     const text =
-      request.kind === "manual_step"
-        ? `${request.reason}\n\nComplete the step in your browser, then tap Continue.`
-        : `${request.reason}\n\nReply with your ${request.placeholder ?? "input"} in chat after tapping Continue.`;
+      request.kind === "voice_input"
+        ? `${request.reason}\n\nVoice input is only available in the interactive terminal — type your message instead.`
+        : request.kind === "manual_step"
+          ? `${request.reason}\n\nComplete the step in your browser, then tap Continue.`
+          : `${request.reason}\n\nReply with your ${request.placeholder ?? "input"} in chat after tapping Continue.`;
 
     try {
       await this.api.sendMessage(this.chatId, truncate(text, 3500), {
