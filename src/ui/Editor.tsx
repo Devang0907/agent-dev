@@ -353,7 +353,7 @@ export function Editor({
           </Text>
         ) : (
           <Text color={theme.textMuted}>
-            Tab switch mode · Shift+Tab reverse · Enter send · Shift+Enter newline · Ctrl+G latest
+            Tab switch mode · Shift+Tab reverse · Enter send · Ctrl+G latest
           </Text>
         )}
       </Box>
