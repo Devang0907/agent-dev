@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { Box, Text } from "ink";
 import type { Key } from "ink";
 import type { ThemeColors } from "./theme.js";
@@ -58,6 +58,23 @@ function applySuggestion(suggestion: InputSuggestion, isSkillCmd: boolean): stri
   return isSkillCmd ? `${suggestion.cmd} ` : suggestion.cmd;
 }
 
+export function mergeVoiceTranscript(existing: string, cursorPos: number, transcript: string): {
+  text: string;
+  cursorPos: number;
+} {
+  if (!existing) {
+    return { text: transcript, cursorPos: transcript.length };
+  }
+  const pos = Math.min(cursorPos, existing.length);
+  const before = existing.slice(0, pos);
+  const after = existing.slice(pos);
+  const sepBefore = before.length > 0 && !/\s$/.test(before) ? " " : "";
+  const sepAfter = after.length > 0 && !/^\s/.test(after) ? " " : "";
+  const inserted = sepBefore + transcript + sepAfter;
+  const text = before + inserted + after;
+  return { text, cursorPos: pos + sepBefore.length + transcript.length };
+}
+
 export function Editor({
   theme,
   model,
@@ -81,6 +98,9 @@ export function Editor({
   const [pickerScroll, setPickerScroll] = useState(0);
   const [spinIdx, setSpinIdx] = useState(0);
   const [cursorOn, setCursorOn] = useState(true);
+  const valueRef = useRef(value);
+  const cursorPosRef = useRef(cursorPos);
+  const lastAppliedVoiceSeq = useRef(0);
 
   const skillList = useMemo(() => skills, [skills]);
   const voiceBusy = voiceState === "listening" || voiceState === "transcribing";
@@ -93,10 +113,10 @@ export function Editor({
   }, [pickerOpen, onSuggestionsOpenChange]);
 
   useEffect(() => {
-    if (!running) return;
+    if (!running && !voiceBusy) return;
     const id = setInterval(() => setSpinIdx((i) => (i + 1) % SPINNER_FRAMES.length), 80);
     return () => clearInterval(id);
-  }, [running]);
+  }, [running, voiceBusy]);
 
   useEffect(() => {
     if (disabled) return;
@@ -140,11 +160,24 @@ export function Editor({
   );
 
   useEffect(() => {
+    valueRef.current = value;
+  }, [value]);
+
+  useEffect(() => {
+    cursorPosRef.current = cursorPos;
+  }, [cursorPos]);
+
+  useEffect(() => {
     if (!voiceTranscriptSeq || voiceTranscript === undefined) return;
-    setValue(voiceTranscript);
-    setCursorPos(voiceTranscript.length);
-    updateSuggestions(voiceTranscript);
-  }, [voiceTranscript, voiceTranscriptSeq, updateSuggestions]);
+    if (voiceTranscriptSeq <= lastAppliedVoiceSeq.current) return;
+    lastAppliedVoiceSeq.current = voiceTranscriptSeq;
+
+    const merged = mergeVoiceTranscript(valueRef.current, cursorPosRef.current, voiceTranscript);
+    setValue(merged.text);
+    setCursorPos(merged.cursorPos);
+    cursorPosRef.current = merged.cursorPos;
+    setSuggestions(getInputSuggestions(merged.text, skillList));
+  }, [voiceTranscript, voiceTranscriptSeq, skillList]);
 
   const setValueAndCursor = useCallback((next: string, nextCursor: number) => {
     setValue(next);
@@ -296,6 +329,8 @@ export function Editor({
       ? "Transcribing…"
       : "Listening… speak your task"
     : "Ask anything…";
+  const voiceStatus =
+    voiceState === "transcribing" ? "Transcribing speech…" : "Listening… speak now";
   const showCursor = !disabled && !voiceBusy && cursorOn;
 
   return (
@@ -334,7 +369,22 @@ export function Editor({
         </Box>
       )}
 
-      <Panel theme={theme} borderColor={disabled || voiceBusy ? theme.border : theme.primary} marginBottom={0}>
+      {voiceBusy && (
+        <Box
+          flexDirection="row"
+          borderStyle="round"
+          borderColor={theme.primary}
+          paddingX={1}
+          marginBottom={1}
+        >
+          <Text color={theme.primary}>
+            {SPINNER_FRAMES[spinIdx]} {voiceStatus}
+          </Text>
+          <Text color={theme.textMuted}> · Esc cancel</Text>
+        </Box>
+      )}
+
+      <Panel theme={theme} borderColor={disabled ? theme.border : theme.primary} marginBottom={0}>
         <Box flexDirection="row">
           {value.length > 0 || cursorPos > 0 ? (
             <Text color={theme.text}>
@@ -370,9 +420,15 @@ export function Editor({
             <Text color={theme.primary}>{SPINNER_FRAMES[spinIdx]}</Text>
             {" "}esc interrupt
           </Text>
+        ) : voiceBusy ? (
+          <Text color={theme.textMuted}>
+            <Text color={theme.primary}>{SPINNER_FRAMES[spinIdx]}</Text>
+            {" "}
+            {voiceState === "transcribing" ? "transcribing voice input" : "voice input active · Esc cancel"}
+          </Text>
         ) : (
           <Text color={theme.textMuted}>
-            Tab switch mode · Shift+Tab reverse · Enter send · Ctrl+G latest
+            Tab switch mode · Shift+Tab reverse · Enter send · Ctrl+B voice · Ctrl+G latest
           </Text>
         )}
       </Box>

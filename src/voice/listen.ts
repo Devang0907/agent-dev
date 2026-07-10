@@ -30,6 +30,10 @@ export async function listenForVoice(
   options.onStateChange?.("transcribing");
   const text = await transcribeAudio(wav, settings);
 
+  if (options.signal?.aborted) {
+    throw new VoiceError("ABORTED", "Voice input cancelled");
+  }
+
   if (!text.trim()) {
     throw new VoiceError("EMPTY_TRANSCRIPT", "Couldn't detect speech — try again");
   }

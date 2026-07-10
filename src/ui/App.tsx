@@ -127,6 +127,8 @@ export function App({ session, workdir, onQuit }: AppProps) {
   const [voiceTranscript, setVoiceTranscript] = useState<string | undefined>();
   const [voiceTranscriptSeq, setVoiceTranscriptSeq] = useState(0);
   const voiceAbortRef = useRef<AbortController | null>(null);
+  const voiceStateRef = useRef<VoiceState>("idle");
+  const voiceSessionRef = useRef(0);
   /** null = follow latest output */
   const [scrollOffset, setScrollOffset] = useState<number | null>(null);
   const [pendingCommand, setPendingCommand] = useState<PermissionRequest | null>(null);
@@ -470,12 +472,19 @@ export function App({ session, workdir, onQuit }: AppProps) {
     { isActive: overlay === "none" && hasChat },
   );
 
-  const startVoiceInput = useCallback(async () => {
-    if (running || voiceState !== "idle") return;
+  useEffect(() => {
+    voiceStateRef.current = voiceState;
+  }, [voiceState]);
 
+  const startVoiceInput = useCallback(async () => {
+    if (running) return;
+    if (voiceStateRef.current === "listening" || voiceStateRef.current === "transcribing") return;
+
+    const sessionId = ++voiceSessionRef.current;
     voiceAbortRef.current?.abort();
     const controller = new AbortController();
     voiceAbortRef.current = controller;
+    const isCurrentSession = () => voiceSessionRef.current === sessionId;
 
     setVoiceState("listening");
     setVoiceTranscript(undefined);
@@ -483,19 +492,16 @@ export function App({ session, workdir, onQuit }: AppProps) {
     try {
       const text = await listenForVoice(settings, {
         signal: controller.signal,
-        onStateChange: (state) => setVoiceState(state),
+        onStateChange: (state) => {
+          if (isCurrentSession()) setVoiceState(state);
+        },
       });
-      if (controller.signal.aborted) return;
-      setVoiceState("idle");
+      if (!isCurrentSession() || controller.signal.aborted) return;
       setVoiceTranscript(text);
       setVoiceTranscriptSeq((seq) => seq + 1);
     } catch (err) {
-      if (controller.signal.aborted) {
-        setVoiceState("idle");
-        return;
-      }
-      if (err instanceof VoiceError && err.code === "ABORTED") {
-        setVoiceState("idle");
+      if (!isCurrentSession()) return;
+      if (controller.signal.aborted || (err instanceof VoiceError && err.code === "ABORTED")) {
         return;
       }
       const message =
@@ -503,15 +509,16 @@ export function App({ session, workdir, onQuit }: AppProps) {
           ? err.message
           : sanitizeErrorForUser(err instanceof Error ? err.message : String(err)) ??
             "Voice input failed";
-      setVoiceState("error");
       setDisplayMessages((prev) => [...prev, toDisplayMessage("assistant", message)]);
-      setVoiceState("idle");
     } finally {
+      if (isCurrentSession()) {
+        setVoiceState("idle");
+      }
       if (voiceAbortRef.current === controller) {
         voiceAbortRef.current = null;
       }
     }
-  }, [running, voiceState, settings]);
+  }, [running, settings]);
 
   useAppInput(
     (input, key) => {
@@ -561,6 +568,11 @@ export function App({ session, workdir, onQuit }: AppProps) {
 
       if (input === "g" && key.ctrl) {
         followLatest();
+        return;
+      }
+
+      if (input === "b" && key.ctrl) {
+        void startVoiceInput();
       }
     },
     { isActive: overlay === "none" },
