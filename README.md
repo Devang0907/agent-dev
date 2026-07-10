@@ -271,9 +271,14 @@ While the agent is busy, Telegram accepts **one queued follow-up message** per c
 
 Speak tasks instead of typing. The agent has a **`voice` tool** — ask it to listen (e.g. *"use voice to hear my task"*) and it will record your speech, transcribe via **Groq Whisper** (`whisper-large-v3-turbo`), and continue with the transcript.
 
-You can also type **`/voice`** in the terminal to speak directly into the input box (review transcript, then Enter to send).
+You can also speak directly into the input box without sending yet:
 
-Requires `GROQ_API_KEY` (same key as Groq LLM models). Press **Esc** while listening to cancel.
+- **`/voice`** — slash command
+- **Ctrl+B** — keyboard shortcut (voice mode)
+
+Recording stops after a short silence (default 1.5s). A **listening banner** appears above the input while the mic is active; it switches to **Transcribing…** while speech is converted to text. Review the transcript in the input box, then press **Enter** to send. You can mix voice and typing — dictate a phrase, type more, or press **Ctrl+B** again to append another voice segment at the cursor.
+
+Requires `GROQ_API_KEY` (same key as Groq LLM models). Press **Esc** while listening or transcribing to cancel.
 
 Optional voice settings in `~/.agent-dev/settings.json`:
 
@@ -290,7 +295,8 @@ Optional voice settings in `~/.agent-dev/settings.json`:
 **Keyboard shortcuts:**
 
 - **Tab** / **Shift+Tab** — cycle Build ↔ Plan when input is empty
-- **Esc** — abort a running turn (or cancel `/voice` listening)
+- **Esc** — abort a running turn (or cancel voice input)
+- **Ctrl+B** — voice input (same as `/voice`)
 - **Ctrl+G** — scroll chat to latest
 - **Ctrl+U** / **Ctrl+D** — scroll chat up/down
 
