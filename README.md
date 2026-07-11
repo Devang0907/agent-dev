@@ -112,6 +112,9 @@ npm run build && npm start                     # Production build
 npm test                                       # Run test suite
 npm run test:watch                             # Watch mode
 npm run test:coverage                          # Coverage report
+npm run eval                                   # Agent evaluation suite (smoke, optional)
+npm run eval:full                              # Full agent evaluations (expensive)
+npm run eval:deterministic                     # Deterministic evals (no API keys)
 ```
 
 | Flag | Description |
@@ -131,6 +134,20 @@ agent skills add vercel-labs/agent-skills -g    # global
 agent skills find react
 agent skills list
 ```
+
+### Agent evaluation suite
+
+Optional **real-world agent evaluations** that stress-test agentic behavior with live LLM calls. Separate from `npm test` and **not run in CI**.
+
+```bash
+npm run eval                    # ~5 smoke scenarios (default)
+npm run eval:full               # Full scenario suite
+npm run eval:deterministic      # Mock-stream scenarios, no API keys
+npm run eval -- --list          # List scenarios
+npm run eval -- --model anthropic/claude-sonnet-4-6 --model openai/gpt-4o  # Compare models
+```
+
+See [evaluations/README.md](evaluations/README.md) for authoring guide and architecture.
 
 ## Telegram gateway
 

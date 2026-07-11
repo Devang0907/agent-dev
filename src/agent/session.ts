@@ -79,6 +79,11 @@ export class AgentSession extends EventEmitter {
   private compactedThisTurn = false;
   /** Custom agent team from multi_agents.md, pre-approved by the user. */
   private multiAgentWorkflow: MultiAgentProfile[] | null = null;
+  private toolExecuteHook?: (
+    name: string,
+    args: Record<string, unknown>,
+    execute: () => Promise<string>,
+  ) => Promise<string>;
 
   constructor(
     settings: Settings,
@@ -235,6 +240,16 @@ export class AgentSession extends EventEmitter {
     return this.multiAgentWorkflow;
   }
 
+  setToolExecuteHook(
+    hook?: (
+      name: string,
+      args: Record<string, unknown>,
+      execute: () => Promise<string>,
+    ) => Promise<string>,
+  ): void {
+    this.toolExecuteHook = hook;
+  }
+
   private isBossMode(): boolean {
     return this.getOrchestratorMode() === "boss";
   }
@@ -328,6 +343,7 @@ export class AgentSession extends EventEmitter {
           }
           return false;
         },
+        toolExecuteHook: this.toolExecuteHook,
       });
     } finally {
       if (isBoss) setDelegationContext(null);

@@ -1,0 +1,2 @@
+# Baselines are generated via: npm run eval -- --baseline
+# Compare via: npm run eval -- --compare

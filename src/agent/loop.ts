@@ -90,6 +90,12 @@ export interface AgentLoopOptions {
   fileScope?: string[];
   /** Multi-agent: extra guard consulted before write/edit/diff (claim registry). */
   fileWriteGuard?: (path: string) => string | null;
+  /** Optional hook for eval/testing — intercept tool execution. */
+  toolExecuteHook?: (
+    name: string,
+    args: Record<string, unknown>,
+    execute: () => Promise<string>,
+  ) => Promise<string>;
 }
 
 function isToolUseFailedError(message: string): boolean {
@@ -155,6 +161,11 @@ async function runToolBatch(
   fileScope?: string[],
   fileWriteGuard?: (path: string) => string | null,
   allowedTools?: string[],
+  toolExecuteHook?: (
+    name: string,
+    args: Record<string, unknown>,
+    execute: () => Promise<string>,
+  ) => Promise<string>,
 ): Promise<boolean> {
   let stopAfterBatch = false;
   const allowedSet = allowedTools ? new Set(allowedTools) : null;
@@ -273,7 +284,9 @@ async function runToolBatch(
     if (permissionAction === "deny") {
       result = `Command denied by permission policy: ${command}`;
     } else if (permissionAction === "allow") {
-      result = await runExecute();
+      result = toolExecuteHook
+        ? await toolExecuteHook(tc.name, args, runExecute)
+        : await runExecute();
     } else if (onPermissionRequest) {
       const approved = await onPermissionRequest({
         toolCallId: tc.id,
@@ -281,7 +294,9 @@ async function runToolBatch(
         args,
         command,
       });
-      result = approved ? await runExecute() : "Command execution denied by user.";
+      const exec = async () =>
+        toolExecuteHook ? await toolExecuteHook(tc.name, args, runExecute) : await runExecute();
+      result = approved ? await exec() : "Command execution denied by user.";
     } else {
       result = "Command execution denied — permission handler not available.";
     }
@@ -397,6 +412,7 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<ChatMessa
     onContextOverflow,
     fileScope,
     fileWriteGuard,
+    toolExecuteHook,
   } = options;
 
   const context = [...messages];
@@ -535,6 +551,7 @@ export async function runAgentLoop(options: AgentLoopOptions): Promise<ChatMessa
       fileScope,
       fileWriteGuard,
       allowedTools,
+      toolExecuteHook,
     );
 
     if (stopAfterBatch) {

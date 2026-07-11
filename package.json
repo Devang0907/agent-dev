@@ -32,6 +32,10 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "eval": "tsx evaluations/cli.ts",
+    "eval:full": "tsx evaluations/cli.ts --tag full",
+    "eval:compare": "tsx evaluations/cli.ts --compare",
+    "eval:deterministic": "tsx evaluations/cli.ts --tag deterministic",
     "prepublishOnly": "npm run build",
     "postinstall": "node scripts/postinstall.js",
     "publish:public": "npm publish --access public"

@@ -32,6 +32,9 @@ Thumbs.db
 # Test / coverage
 coverage/
 
+# Eval reports (generated)
+evaluations/reports/
+
 # Local config overrides
 .agent-dev/
 
