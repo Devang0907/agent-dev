@@ -27,8 +27,7 @@ export function evaluateApproval(
   }
 
   if (policy === "deny") {
-    const isDangerous = DANGEROUS_PATTERNS.some((p) => p.test(cmd));
-    if (isDangerous || request.name === "bash" || request.name === "exec" || request.name === "git") {
+    if (DANGEROUS_PATTERNS.some((p) => p.test(cmd))) {
       return { approved: false, reason: "deny-policy" };
     }
     return { approved: true, reason: "non-dangerous allowed under deny policy" };

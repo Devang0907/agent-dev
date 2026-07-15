@@ -98,7 +98,10 @@ export class EvalHarness {
           await session.waitForIdle(turnTimeout);
         })(),
         new Promise<void>((_, reject) =>
-          setTimeout(() => reject(new Error("Turn timeout")), turnTimeout),
+          setTimeout(() => {
+            session.abort();
+            reject(new Error("Turn timeout"));
+          }, turnTimeout),
         ),
       ]);
 

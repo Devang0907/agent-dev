@@ -17,8 +17,6 @@
 </p>
 
 <p align="center">
-  <a href="https://agent-dev.dev/docs">Docs</a>
-  •
   <a href="https://github.com/Devang0907/agent-dev">GitHub</a>
   •
   <a href="https://www.npmjs.com/package/@devang0907/agent-dev">npm</a>

@@ -48,9 +48,26 @@ export function workspaceFileExists(workspace: FixtureWorkspace, relPath: string
   return existsSync(join(workspace.path, relPath));
 }
 
+export function initWorkspaceGit(workspace: FixtureWorkspace): void {
+  if (existsSync(join(workspace.path, ".git"))) return;
+  execSync("git init", { cwd: workspace.path, stdio: "ignore" });
+  execSync('git config user.email "eval@test.com"', { cwd: workspace.path, stdio: "ignore" });
+  execSync('git config user.name "Eval"', { cwd: workspace.path, stdio: "ignore" });
+  try {
+    execSync("git add -A", { cwd: workspace.path, stdio: "ignore" });
+    execSync('git commit -m "init"', { cwd: workspace.path, stdio: "ignore" });
+  } catch {
+    // empty workspace — nothing to commit
+  }
+}
+
 export function getGitStatus(workspace: FixtureWorkspace): string {
   try {
-    return execSync("git status --short", { cwd: workspace.path, encoding: "utf8" });
+    return execSync("git status --short", {
+      cwd: workspace.path,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    });
   } catch {
     return "";
   }
@@ -58,7 +75,11 @@ export function getGitStatus(workspace: FixtureWorkspace): string {
 
 export function getGitDiff(workspace: FixtureWorkspace): string {
   try {
-    return execSync("git diff", { cwd: workspace.path, encoding: "utf8" });
+    return execSync("git diff", {
+      cwd: workspace.path,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    });
   } catch {
     return "";
   }

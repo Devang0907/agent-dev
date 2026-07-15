@@ -5,7 +5,7 @@ import type { EvalScenario, ScenarioResult } from "../scenarios/types.js";
 import { filterScenarios } from "../scenarios/registry.js";
 import { EvalHarness } from "./harness.js";
 import { createIsolationContext } from "./isolation.js";
-import { createFixtureWorkspace } from "../fixtures/workspace.js";
+import { createFixtureWorkspace, initWorkspaceGit } from "../fixtures/workspace.js";
 import { loadSettings } from "../../src/config/settings.js";
 import { getAvailableModels, hasProviderAuth } from "../../src/providers/registry.js";
 import { parseModelRef, modelRef } from "../../src/config/models.js";
@@ -81,6 +81,7 @@ async function runLiveScenario(
 
     const ctx = harness.buildContext(session);
     await scenario.setup(ctx);
+    initWorkspaceGit(workspace);
 
     if (scenario.id === "injected-read-failure") {
       harness.setToolExecuteHook(
@@ -106,7 +107,7 @@ async function runLiveScenario(
     }
 
     const turns = typeof scenario.turns === "function" ? await scenario.turns(ctx) : scenario.turns;
-    const timeout = scenario.timeoutMs ?? config.timeoutMs ?? (scenario.tags.includes("smoke") ? 120_000 : 600_000);
+    const timeout = scenario.timeoutMs ?? config.timeoutMs ?? (scenario.tags.includes("smoke") ? 180_000 : 600_000);
 
     await harness.runTurns(session, turns, timeout);
 

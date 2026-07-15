@@ -65,6 +65,10 @@ async function main(): Promise<void> {
 
   mkdirSync(reportDir, { recursive: true });
 
+  if (!process.env.AGENT_MAX_TOOL_ROUNDS) {
+    process.env.AGENT_MAX_TOOL_ROUNDS = "30";
+  }
+
   const result = await runEvalSuite(config, modelRefs, reportDir);
 
   let comparisons;
